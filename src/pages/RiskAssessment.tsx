@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Risk, calculateRiskScore, getRiskLevel, calculateResultantRisk } from "@/data/types";
-import { annexAControls } from "@/data/annex-a-controls";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,17 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, Search, Plus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
-const emptyRisk = (): Omit<Risk, 'id' | 'riskScore' | 'riskLevel' | 'resultantRisk'> => ({
-  linkedAssetId: '', threat: '', vulnerability: '', existingControlIds: [],
-  controlEffectiveness: 'NA', riskScenario: '', consequence: '', riskOwner: '',
-  likelihood: 3, impact: 3, managementDecision: '', status: 'Open',
-  expectedClosureDate: '', remarks: '',
+interface DbControl {
+  controlId: string;
+  controlName: string;
+}
+
+const emptyRisk = () => ({
+  linkedAssetId: '', threat: '', vulnerability: '', existingControlIds: [] as string[],
+  controlEffectiveness: 'NA' as const, riskScenario: '', consequence: '', riskOwner: '',
+  likelihood: 3, impact: 3, managementDecision: '' as Risk['managementDecision'],
+  status: 'Open' as const, expectedClosureDate: '', remarks: '',
+  riskLevel: 'Medium' as const, resultantRisk: 0,
 });
 
 export default function RiskAssessment() {
@@ -27,13 +33,20 @@ export default function RiskAssessment() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedControls, setSelectedControls] = useState<string[]>([]);
   const [controlSearch, setControlSearch] = useState('');
+  const [controls, setControls] = useState<DbControl[]>([]);
+
+  useEffect(() => {
+    supabase.from('controls').select('control_id, control_name').order('control_id').then(({ data }) => {
+      if (data) setControls(data.map(c => ({ controlId: c.control_id, controlName: c.control_name })));
+    });
+  }, []);
 
   const filteredControls = useMemo(() =>
-    annexAControls.filter(c =>
+    controls.filter(c =>
       c.controlId.toLowerCase().includes(controlSearch.toLowerCase()) ||
       c.controlName.toLowerCase().includes(controlSearch.toLowerCase())
     ).slice(0, 20),
-    [controlSearch]
+    [controls, controlSearch]
   );
 
   const filtered = useMemo(() => {
@@ -45,20 +58,24 @@ export default function RiskAssessment() {
     });
   }, [risks, search, filterLevel, filterStatus]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.linkedAssetId) { toast.error("Select a critical asset"); return; }
     if (!form.threat || !form.vulnerability) { toast.error("Threat and Vulnerability are required"); return; }
     const riskScore = calculateRiskScore(form.likelihood, form.impact);
     const riskLevel = getRiskLevel(riskScore);
     const resultantRisk = calculateResultantRisk(riskScore, form.controlEffectiveness, settings.riskReductionPercent);
-    addRisk({
-      ...form, id: crypto.randomUUID(), existingControlIds: selectedControls,
-      riskScore, riskLevel, resultantRisk,
-    });
-    setForm(emptyRisk());
-    setSelectedControls([]);
-    toast.success("Risk added");
+    try {
+      await addRisk({
+        ...form, existingControlIds: selectedControls,
+        riskLevel, resultantRisk,
+      });
+      setForm(emptyRisk());
+      setSelectedControls([]);
+      toast.success("Risk added");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add risk");
+    }
   };
 
   const toggleControl = (id: string) => {
@@ -107,7 +124,6 @@ export default function RiskAssessment() {
                 Risk Score: <span className="font-bold">{previewScore}</span> — Level: <span className={`font-bold risk-badge-${previewLevel.toLowerCase()} px-1 rounded`}>{previewLevel}</span>
                 {previewScore > settings.riskThreshold && <span className="text-risk-critical ml-1">⚠ Treatment Required</span>}
               </div>
-              {/* Controls */}
               <div>
                 <Label className="text-xs">Existing Controls (Annex A)</Label>
                 <Input placeholder="Search controls..." value={controlSearch} onChange={e => setControlSearch(e.target.value)} className="h-8 text-sm mb-1" />
@@ -198,7 +214,7 @@ export default function RiskAssessment() {
                   <td className="px-2 py-2">{r.resultantRisk}</td>
                   <td className="px-2 py-2"><Badge variant="outline" className="text-xs">{r.status}</Badge></td>
                   <td className="px-2 py-2">
-                    <Button variant="ghost" size="sm" onClick={() => { deleteRisk(r.id); toast.info("Risk deleted"); }}>
+                    <Button variant="ghost" size="sm" onClick={async () => { await deleteRisk(r.id); toast.info("Risk deleted"); }}>
                       <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
                   </td>

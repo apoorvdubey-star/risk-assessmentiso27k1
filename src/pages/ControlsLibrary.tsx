@@ -1,9 +1,16 @@
-import { useState, useMemo } from "react";
-import { annexAControls } from "@/data/annex-a-controls";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search } from "lucide-react";
+
+interface Control {
+  controlId: string;
+  controlName: string;
+  controlDescription: string;
+  controlCategory: string;
+}
 
 const CATEGORIES = ['Organizational', 'People', 'Physical', 'Technological'] as const;
 const CAT_COLORS: Record<string, string> = {
@@ -14,21 +21,41 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 export default function ControlsLibrary() {
+  const [controls, setControls] = useState<Control[]>([]);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchControls = async () => {
+      const { data } = await supabase.from('controls').select('*').order('control_id');
+      if (data) {
+        setControls(data.map(c => ({
+          controlId: c.control_id,
+          controlName: c.control_name,
+          controlDescription: c.control_description,
+          controlCategory: c.control_category,
+        })));
+      }
+      setLoading(false);
+    };
+    fetchControls();
+  }, []);
 
   const filtered = useMemo(() => {
-    return annexAControls.filter(c => {
+    return controls.filter(c => {
       const matchSearch = !search || c.controlId.toLowerCase().includes(search.toLowerCase()) || c.controlName.toLowerCase().includes(search.toLowerCase()) || c.controlDescription.toLowerCase().includes(search.toLowerCase());
       const matchCat = category === 'all' || c.controlCategory === category;
       return matchSearch && matchCat;
     });
-  }, [search, category]);
+  }, [controls, search, category]);
 
   const counts = useMemo(() => ({
-    total: annexAControls.length,
-    ...Object.fromEntries(CATEGORIES.map(c => [c, annexAControls.filter(ctrl => ctrl.controlCategory === c).length])),
-  }), []);
+    total: controls.length,
+    ...Object.fromEntries(CATEGORIES.map(c => [c, controls.filter(ctrl => ctrl.controlCategory === c).length])),
+  }), [controls]);
+
+  if (loading) return <div className="p-6 text-muted-foreground">Loading controls...</div>;
 
   return (
     <div className="p-6 split-panel h-full">

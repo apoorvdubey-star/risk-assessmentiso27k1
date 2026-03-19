@@ -13,16 +13,17 @@ import * as XLSX from "xlsx";
 
 const ASSET_TYPES = ['Hardware', 'Software', 'Service', 'People', 'Data', 'Others'] as const;
 
-const emptyAsset = (): Omit<Asset, 'id' | 'criticalityScore' | 'isCritical'> => ({
-  assetId: '', assetName: '', assetType: 'Hardware', dataClassification: '', description: '',
+const emptyForm = () => ({
+  assetId: '', assetName: '', assetType: 'Hardware' as Asset['assetType'], dataClassification: '', description: '',
   assetOwner: '', department: '', confidentiality: 3, integrity: 3, availability: 3,
 });
 
 export default function AssetRegister() {
-  const { assets, addAsset, deleteAsset, importAssets } = useApp();
-  const [form, setForm] = useState(emptyAsset());
+  const { assets, addAsset, deleteAsset, importAssets, loading } = useApp();
+  const [form, setForm] = useState(emptyForm());
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState('all');
+  const [submitting, setSubmitting] = useState(false);
 
   const departments = useMemo(() => [...new Set(assets.map(a => a.department).filter(Boolean))], [assets]);
 
@@ -34,31 +35,35 @@ export default function AssetRegister() {
     });
   }, [assets, search, filterDept]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.assetId || !form.assetName) { toast.error("Asset ID and Name are required"); return; }
     if (assets.some(a => a.assetId === form.assetId)) { toast.error("Asset ID already exists"); return; }
-    const score = calculateCriticality(form.confidentiality, form.integrity, form.availability);
-    addAsset({ ...form, id: crypto.randomUUID(), criticalityScore: score, isCritical: isCriticalAsset(score) });
-    setForm(emptyAsset());
-    toast.success("Asset added");
+    setSubmitting(true);
+    try {
+      await addAsset(form);
+      setForm(emptyForm());
+      toast.success("Asset added");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add asset");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
         const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]]);
-        const imported: Asset[] = data.map((row) => {
+        const imported = data.map((row) => {
           const c = Number(row['Confidentiality'] || row['confidentiality']) || 3;
           const i = Number(row['Integrity'] || row['integrity']) || 3;
           const a = Number(row['Availability'] || row['availability']) || 3;
-          const score = calculateCriticality(c, i, a);
           return {
-            id: crypto.randomUUID(),
             assetId: String(row['Asset ID'] || row['assetId'] || ''),
             assetName: String(row['Asset Name'] || row['assetName'] || row['Name'] || ''),
             assetType: (String(row['Asset Type'] || row['assetType'] || row['Type'] || 'Others')) as Asset['assetType'],
@@ -67,10 +72,9 @@ export default function AssetRegister() {
             assetOwner: String(row['Owner'] || row['assetOwner'] || ''),
             department: String(row['Department'] || row['department'] || ''),
             confidentiality: c, integrity: i, availability: a,
-            criticalityScore: score, isCritical: isCriticalAsset(score),
           };
         }).filter(a => a.assetId && a.assetName);
-        importAssets(imported);
+        await importAssets(imported);
         toast.success(`Imported ${imported.length} assets`);
       } catch { toast.error("Failed to parse Excel file"); }
     };
@@ -85,9 +89,10 @@ export default function AssetRegister() {
     XLSX.writeFile(wb, "asset_register.xlsx");
   };
 
+  if (loading) return <div className="p-6 text-muted-foreground">Loading...</div>;
+
   return (
     <div className="flex h-full">
-      {/* LEFT: Form */}
       <div className="w-96 border-r p-4 split-panel shrink-0">
         <Card>
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Plus className="h-4 w-4" /> Add Asset</CardTitle></CardHeader>
@@ -117,7 +122,7 @@ export default function AssetRegister() {
                   <Badge className="ml-2 risk-badge-critical text-xs">Critical</Badge>
                 )}
               </div>
-              <Button type="submit" className="w-full">Add Asset</Button>
+              <Button type="submit" className="w-full" disabled={submitting}>{submitting ? 'Adding...' : 'Add Asset'}</Button>
             </form>
           </CardContent>
         </Card>
@@ -129,7 +134,6 @@ export default function AssetRegister() {
           <Button variant="outline" size="sm" className="flex-1" onClick={exportToExcel}>Export</Button>
         </div>
       </div>
-      {/* RIGHT: Table */}
       <div className="flex-1 p-4 split-panel">
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
@@ -171,7 +175,7 @@ export default function AssetRegister() {
                     {a.isCritical ? <Badge className="risk-badge-critical text-xs">Yes</Badge> : <Badge variant="outline" className="text-xs">No</Badge>}
                   </td>
                   <td className="px-3 py-2">
-                    <Button variant="ghost" size="sm" onClick={() => { deleteAsset(a.id); toast.info("Asset deleted"); }}>
+                    <Button variant="ghost" size="sm" onClick={async () => { await deleteAsset(a.id); toast.info("Asset deleted"); }}>
                       <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
                   </td>
