@@ -14,7 +14,194 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_settings: {
+        Row: {
+          created_at: string
+          id: string
+          risk_matrix_type: string
+          risk_reduction_percent: number
+          risk_threshold: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          risk_matrix_type?: string
+          risk_reduction_percent?: number
+          risk_threshold?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          risk_matrix_type?: string
+          risk_reduction_percent?: number
+          risk_threshold?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      assets: {
+        Row: {
+          asset_id: string
+          asset_name: string
+          asset_owner: string | null
+          asset_type: Database["public"]["Enums"]["asset_type"]
+          availability: number
+          confidentiality: number
+          created_at: string
+          criticality_score: number | null
+          data_classification: string | null
+          department: string | null
+          description: string | null
+          id: string
+          integrity: number
+          is_critical: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          asset_name: string
+          asset_owner?: string | null
+          asset_type?: Database["public"]["Enums"]["asset_type"]
+          availability?: number
+          confidentiality?: number
+          created_at?: string
+          criticality_score?: number | null
+          data_classification?: string | null
+          department?: string | null
+          description?: string | null
+          id?: string
+          integrity?: number
+          is_critical?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          asset_name?: string
+          asset_owner?: string | null
+          asset_type?: Database["public"]["Enums"]["asset_type"]
+          availability?: number
+          confidentiality?: number
+          created_at?: string
+          criticality_score?: number | null
+          data_classification?: string | null
+          department?: string | null
+          description?: string | null
+          id?: string
+          integrity?: number
+          is_critical?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      controls: {
+        Row: {
+          control_category: Database["public"]["Enums"]["control_category"]
+          control_description: string
+          control_id: string
+          control_name: string
+          id: string
+        }
+        Insert: {
+          control_category: Database["public"]["Enums"]["control_category"]
+          control_description?: string
+          control_id: string
+          control_name: string
+          id?: string
+        }
+        Update: {
+          control_category?: Database["public"]["Enums"]["control_category"]
+          control_description?: string
+          control_id?: string
+          control_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      risks: {
+        Row: {
+          consequence: string | null
+          control_effectiveness: Database["public"]["Enums"]["control_effectiveness"]
+          created_at: string
+          existing_control_ids: string[] | null
+          expected_closure_date: string | null
+          id: string
+          impact: number
+          likelihood: number
+          linked_asset_id: string
+          management_decision:
+            | Database["public"]["Enums"]["management_decision"]
+            | null
+          remarks: string | null
+          resultant_risk: number
+          risk_level: Database["public"]["Enums"]["risk_level"]
+          risk_owner: string | null
+          risk_scenario: string | null
+          risk_score: number | null
+          status: Database["public"]["Enums"]["risk_status"]
+          threat: string
+          updated_at: string
+          vulnerability: string
+        }
+        Insert: {
+          consequence?: string | null
+          control_effectiveness?: Database["public"]["Enums"]["control_effectiveness"]
+          created_at?: string
+          existing_control_ids?: string[] | null
+          expected_closure_date?: string | null
+          id?: string
+          impact?: number
+          likelihood?: number
+          linked_asset_id: string
+          management_decision?:
+            | Database["public"]["Enums"]["management_decision"]
+            | null
+          remarks?: string | null
+          resultant_risk?: number
+          risk_level?: Database["public"]["Enums"]["risk_level"]
+          risk_owner?: string | null
+          risk_scenario?: string | null
+          risk_score?: number | null
+          status?: Database["public"]["Enums"]["risk_status"]
+          threat: string
+          updated_at?: string
+          vulnerability: string
+        }
+        Update: {
+          consequence?: string | null
+          control_effectiveness?: Database["public"]["Enums"]["control_effectiveness"]
+          created_at?: string
+          existing_control_ids?: string[] | null
+          expected_closure_date?: string | null
+          id?: string
+          impact?: number
+          likelihood?: number
+          linked_asset_id?: string
+          management_decision?:
+            | Database["public"]["Enums"]["management_decision"]
+            | null
+          remarks?: string | null
+          resultant_risk?: number
+          risk_level?: Database["public"]["Enums"]["risk_level"]
+          risk_owner?: string | null
+          risk_scenario?: string | null
+          risk_score?: number | null
+          status?: Database["public"]["Enums"]["risk_status"]
+          threat?: string
+          updated_at?: string
+          vulnerability?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risks_linked_asset_id_fkey"
+            columns: ["linked_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +210,22 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      asset_type:
+        | "Hardware"
+        | "Software"
+        | "Service"
+        | "People"
+        | "Data"
+        | "Others"
+      control_category:
+        | "Organizational"
+        | "People"
+        | "Physical"
+        | "Technological"
+      control_effectiveness: "Effective" | "Not Effective" | "NA"
+      management_decision: "Avoid" | "Mitigate" | "Transfer" | "Accept"
+      risk_level: "Low" | "Medium" | "High" | "Critical"
+      risk_status: "Open" | "Closed" | "WIP"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +352,25 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      asset_type: [
+        "Hardware",
+        "Software",
+        "Service",
+        "People",
+        "Data",
+        "Others",
+      ],
+      control_category: [
+        "Organizational",
+        "People",
+        "Physical",
+        "Technological",
+      ],
+      control_effectiveness: ["Effective", "Not Effective", "NA"],
+      management_decision: ["Avoid", "Mitigate", "Transfer", "Accept"],
+      risk_level: ["Low", "Medium", "High", "Critical"],
+      risk_status: ["Open", "Closed", "WIP"],
+    },
   },
 } as const
