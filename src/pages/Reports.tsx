@@ -1,12 +1,14 @@
+import { useMemo } from "react";
 import { useApp } from "@/context/AppContext";
-import { annexAControls } from "@/data/annex-a-controls";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileDown } from "lucide-react";
 import * as XLSX from "xlsx";
+import { Button } from "@/components/ui/button";
+import { FileDown } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Reports() {
-  const { assets, risks } = useApp();
+  const { assets, risks, settings } = useApp();
 
   const exportRiskRegister = () => {
     const data = risks.map(r => {
@@ -22,12 +24,14 @@ export default function Reports() {
     download(data, "Risk Register", "risk_register.xlsx");
   };
 
-  const exportSoA = () => {
+  const exportSoA = async () => {
+    const { data: controls } = await supabase.from('controls').select('*').order('control_id');
+    if (!controls) return;
     const usedControls = new Set(risks.flatMap(r => r.existingControlIds));
-    const data = annexAControls.map(c => ({
-      ControlID: c.controlId, ControlName: c.controlName, Category: c.controlCategory,
-      Applicable: usedControls.has(c.controlId) ? 'Yes' : 'No',
-      Justification: usedControls.has(c.controlId) ? 'Applied to identified risks' : 'Not applicable to current risk assessment',
+    const data = controls.map(c => ({
+      ControlID: c.control_id, ControlName: c.control_name, Category: c.control_category,
+      Applicable: usedControls.has(c.control_id) ? 'Yes' : 'No',
+      Justification: usedControls.has(c.control_id) ? 'Applied to identified risks' : 'Not applicable to current risk assessment',
     }));
     download(data, "SoA", "statement_of_applicability.xlsx");
   };
@@ -37,7 +41,7 @@ export default function Reports() {
   };
 
   const exportTreatmentPlan = () => {
-    const data = risks.filter(r => r.riskScore > 12).map(r => ({
+    const data = risks.filter(r => r.riskScore > settings.riskThreshold).map(r => ({
       Asset: assets.find(a => a.id === r.linkedAssetId)?.assetName || '', Threat: r.threat,
       RiskScore: r.riskScore, Level: r.riskLevel, Decision: r.managementDecision,
       Residual: r.resultantRisk, Status: r.status, Owner: r.riskOwner,
@@ -54,8 +58,8 @@ export default function Reports() {
 
   const reports = [
     { title: "Risk Register", desc: "Complete risk register with all assessments", action: exportRiskRegister, count: risks.length },
-    { title: "Statement of Applicability (SoA)", desc: "ISO 27001 Annex A control applicability", action: exportSoA, count: annexAControls.length },
-    { title: "Risk Treatment Plan", desc: "Risks requiring treatment (score > threshold)", action: exportTreatmentPlan, count: risks.filter(r => r.riskScore > 12).length },
+    { title: "Statement of Applicability (SoA)", desc: "ISO 27001 Annex A control applicability", action: exportSoA, count: 93 },
+    { title: "Risk Treatment Plan", desc: "Risks requiring treatment (score > threshold)", action: exportTreatmentPlan, count: risks.filter(r => r.riskScore > settings.riskThreshold).length },
     { title: "Asset Inventory", desc: "Complete asset register with CIA ratings", action: exportAssetInventory, count: assets.length },
   ];
 
@@ -65,15 +69,11 @@ export default function Reports() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {reports.map(r => (
           <Card key={r.title}>
-            <CardHeader>
-              <CardTitle className="text-sm">{r.title}</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-sm">{r.title}</CardTitle></CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground mb-3">{r.desc}</p>
               <p className="text-xs text-muted-foreground mb-3">Records: {r.count}</p>
-              <Button variant="outline" size="sm" onClick={r.action}>
-                <FileDown className="h-3 w-3 mr-1" /> Export to Excel
-              </Button>
+              <Button variant="outline" size="sm" onClick={r.action}><FileDown className="h-3 w-3 mr-1" /> Export to Excel</Button>
             </CardContent>
           </Card>
         ))}
