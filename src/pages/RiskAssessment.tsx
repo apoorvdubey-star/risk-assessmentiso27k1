@@ -18,7 +18,7 @@ interface DbControl {
 
 const emptyRisk = () => ({
   linkedAssetId: '', threat: '', vulnerability: '', existingControlIds: [] as string[],
-  controlEffectiveness: 'NA' as const, riskScenario: '', consequence: '', riskOwner: '',
+  controlEffectiveness: 'NA' as Risk['controlEffectiveness'], riskScenario: '', consequence: '', riskOwner: '',
   likelihood: 3, impact: 3, managementDecision: '' as Risk['managementDecision'],
   status: 'Open' as const, expectedClosureDate: '', remarks: '',
   riskLevel: 'Medium' as const, resultantRisk: 0,
