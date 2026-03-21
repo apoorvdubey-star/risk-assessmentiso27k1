@@ -12,6 +12,8 @@ export interface Asset {
   availability: number;
   criticalityScore: number;
   isCritical: boolean;
+  criticalityApproved: boolean;
+  criticalityApprovedBy: string | null;
 }
 
 export interface Risk {
