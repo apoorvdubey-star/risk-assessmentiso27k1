@@ -8,12 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Search, Plus, AlertTriangle } from "lucide-react";
+import { Trash2, Search, Plus, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface DbControl {
   controlId: string;
   controlName: string;
+}
+
+interface AssetOwnerInfo {
+  name: string;
+  department_name: string;
 }
 
 const emptyRisk = () => ({
@@ -34,12 +39,39 @@ export default function RiskAssessment() {
   const [selectedControls, setSelectedControls] = useState<string[]>([]);
   const [controlSearch, setControlSearch] = useState('');
   const [controls, setControls] = useState<DbControl[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [industry, setIndustry] = useState('');
+  const [assetOwners, setAssetOwners] = useState<AssetOwnerInfo[]>([]);
 
   useEffect(() => {
-    supabase.from('controls').select('control_id, control_name').order('control_id').then(({ data }) => {
-      if (data) setControls(data.map(c => ({ controlId: c.control_id, controlName: c.control_name })));
+    // Load controls, org industry, and asset owners
+    Promise.all([
+      supabase.from('controls').select('control_id, control_name').order('control_id'),
+      supabase.from('org_setup').select('industry').limit(1).single(),
+      supabase.from('asset_owners').select('name, departments(name)'),
+    ]).then(([controlsRes, orgRes, ownersRes]) => {
+      if (controlsRes.data) setControls(controlsRes.data.map(c => ({ controlId: c.control_id, controlName: c.control_name })));
+      if (orgRes.data) setIndustry(orgRes.data.industry || '');
+      if (ownersRes.data) {
+        setAssetOwners(ownersRes.data.map((o: any) => ({
+          name: o.name,
+          department_name: o.departments?.name || '',
+        })));
+      }
     });
   }, []);
+
+  // Auto-set risk owner from asset owners when asset is selected
+  useEffect(() => {
+    if (!form.linkedAssetId) return;
+    const asset = assets.find(a => a.id === form.linkedAssetId);
+    if (!asset) return;
+    // Find owner for this asset's department
+    const owner = assetOwners.find(o => o.department_name === asset.department);
+    if (owner) {
+      setForm(p => ({ ...p, riskOwner: owner.name }));
+    }
+  }, [form.linkedAssetId, assets, assetOwners]);
 
   const filteredControls = useMemo(() =>
     controls.filter(c =>
@@ -57,6 +89,44 @@ export default function RiskAssessment() {
       return matchSearch && matchLevel && matchStatus;
     });
   }, [risks, search, filterLevel, filterStatus]);
+
+  const handleAiSuggest = async () => {
+    if (!form.linkedAssetId || !form.threat) {
+      toast.error("Select an asset and enter a threat first");
+      return;
+    }
+    const asset = assets.find(a => a.id === form.linkedAssetId);
+    if (!asset) return;
+
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-risk-suggest', {
+        body: {
+          assetName: asset.assetName,
+          assetType: asset.assetType,
+          department: asset.department,
+          threat: form.threat,
+          industry,
+        },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      setForm(p => ({
+        ...p,
+        vulnerability: data.vulnerability || p.vulnerability,
+        consequence: data.consequence || p.consequence,
+        riskScenario: data.riskScenario || p.riskScenario,
+        likelihood: data.suggestedLikelihood || p.likelihood,
+        impact: data.suggestedImpact || p.impact,
+      }));
+      toast.success("AI suggestions applied");
+    } catch (err: any) {
+      toast.error(err.message || "AI suggestion failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,6 +176,20 @@ export default function RiskAssessment() {
                 </Select>
               </div>
               <div><Label className="text-xs">Threat *</Label><Input value={form.threat} onChange={e => setForm(p => ({ ...p, threat: e.target.value }))} className="h-8 text-sm" required /></div>
+              
+              {/* AI Auto-populate button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full text-xs gap-1.5"
+                onClick={handleAiSuggest}
+                disabled={aiLoading || !form.linkedAssetId || !form.threat}
+              >
+                {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                {aiLoading ? "Generating suggestions..." : "AI Auto-populate"}
+              </Button>
+
               <div><Label className="text-xs">Vulnerability *</Label><Input value={form.vulnerability} onChange={e => setForm(p => ({ ...p, vulnerability: e.target.value }))} className="h-8 text-sm" required /></div>
               <div><Label className="text-xs">Risk Scenario</Label><Input value={form.riskScenario} onChange={e => setForm(p => ({ ...p, riskScenario: e.target.value }))} className="h-8 text-sm" /></div>
               <div><Label className="text-xs">Consequence</Label><Input value={form.consequence} onChange={e => setForm(p => ({ ...p, consequence: e.target.value }))} className="h-8 text-sm" /></div>

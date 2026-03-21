@@ -41,6 +41,38 @@ export type Database = {
         }
         Relationships: []
       }
+      asset_owners: {
+        Row: {
+          created_at: string
+          department_id: string
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          email: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_owners_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assets: {
         Row: {
           asset_id: string
@@ -122,6 +154,51 @@ export type Database = {
           control_id?: string
           control_name?: string
           id?: string
+        }
+        Relationships: []
+      }
+      departments: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      org_setup: {
+        Row: {
+          created_at: string
+          id: string
+          industry: string
+          org_name: string
+          setup_completed: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          industry?: string
+          org_name?: string
+          setup_completed?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          industry?: string
+          org_name?: string
+          setup_completed?: boolean
+          updated_at?: string
         }
         Relationships: []
       }

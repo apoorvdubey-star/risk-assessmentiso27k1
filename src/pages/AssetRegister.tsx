@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Asset, calculateCriticality, isCriticalAsset } from "@/data/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,8 +29,30 @@ export default function AssetRegister() {
   const [filterDept, setFilterDept] = useState('all');
   const [submitting, setSubmitting] = useState(false);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
+  const [orgDepartments, setOrgDepartments] = useState<string[]>([]);
+  const [orgOwners, setOrgOwners] = useState<{ name: string; department: string }[]>([]);
 
-  const departments = useMemo(() => [...new Set(assets.map(a => a.department).filter(Boolean))], [assets]);
+  useEffect(() => {
+    Promise.all([
+      supabase.from('departments').select('name').order('name'),
+      supabase.from('asset_owners').select('name, departments(name)'),
+    ]).then(([deptRes, ownerRes]) => {
+      if (deptRes.data) setOrgDepartments(deptRes.data.map(d => d.name));
+      if (ownerRes.data) setOrgOwners(ownerRes.data.map((o: any) => ({ name: o.name, department: (o.departments as any)?.name || '' })));
+    });
+  }, []);
+
+  const departments = useMemo(() => {
+    const fromAssets = assets.map(a => a.department).filter(Boolean);
+    return [...new Set([...orgDepartments, ...fromAssets])];
+  }, [assets, orgDepartments]);
+
+  // Filter owners by selected department
+  const availableOwners = useMemo(() => {
+    const dept = form.department || (editAsset?.department);
+    if (!dept) return orgOwners;
+    return orgOwners.filter(o => o.department === dept);
+  }, [form.department, editAsset?.department, orgOwners]);
 
   const filtered = useMemo(() => {
     return assets.filter(a => {
@@ -143,8 +166,26 @@ export default function AssetRegister() {
               </div>
               <Field label="Classification" value={form.dataClassification} onChange={v => setForm(p => ({ ...p, dataClassification: v }))} />
               <Field label="Description" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} />
-              <Field label="Owner" value={form.assetOwner} onChange={v => setForm(p => ({ ...p, assetOwner: v }))} />
-              <Field label="Department" value={form.department} onChange={v => setForm(p => ({ ...p, department: v }))} />
+              <div>
+                <Label className="text-xs">Owner</Label>
+                <Select value={form.assetOwner || '_none'} onValueChange={v => setForm(p => ({ ...p, assetOwner: v === '_none' ? '' : v }))}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select owner" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select...</SelectItem>
+                    {availableOwners.map(o => <SelectItem key={o.name} value={o.name}>{o.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Department</Label>
+                <Select value={form.department || '_none'} onValueChange={v => setForm(p => ({ ...p, department: v === '_none' ? '' : v, assetOwner: '' }))}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select department" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select...</SelectItem>
+                    {departments.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 <NumberField label="C" value={form.confidentiality} onChange={v => setForm(p => ({ ...p, confidentiality: v }))} />
                 <NumberField label="I" value={form.integrity} onChange={v => setForm(p => ({ ...p, integrity: v }))} />
