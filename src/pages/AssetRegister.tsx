@@ -29,8 +29,30 @@ export default function AssetRegister() {
   const [filterDept, setFilterDept] = useState('all');
   const [submitting, setSubmitting] = useState(false);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
+  const [orgDepartments, setOrgDepartments] = useState<string[]>([]);
+  const [orgOwners, setOrgOwners] = useState<{ name: string; department: string }[]>([]);
 
-  const departments = useMemo(() => [...new Set(assets.map(a => a.department).filter(Boolean))], [assets]);
+  useEffect(() => {
+    Promise.all([
+      supabase.from('departments').select('name').order('name'),
+      supabase.from('asset_owners').select('name, departments(name)'),
+    ]).then(([deptRes, ownerRes]) => {
+      if (deptRes.data) setOrgDepartments(deptRes.data.map(d => d.name));
+      if (ownerRes.data) setOrgOwners(ownerRes.data.map((o: any) => ({ name: o.name, department: (o.departments as any)?.name || '' })));
+    });
+  }, []);
+
+  const departments = useMemo(() => {
+    const fromAssets = assets.map(a => a.department).filter(Boolean);
+    return [...new Set([...orgDepartments, ...fromAssets])];
+  }, [assets, orgDepartments]);
+
+  // Filter owners by selected department
+  const availableOwners = useMemo(() => {
+    const dept = form.department || (editAsset?.department);
+    if (!dept) return orgOwners;
+    return orgOwners.filter(o => o.department === dept);
+  }, [form.department, editAsset?.department, orgOwners]);
 
   const filtered = useMemo(() => {
     return assets.filter(a => {
