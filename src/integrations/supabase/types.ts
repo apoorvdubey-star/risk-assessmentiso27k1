@@ -50,6 +50,8 @@ export type Database = {
           availability: number
           confidentiality: number
           created_at: string
+          criticality_approved: boolean
+          criticality_approved_by: string | null
           criticality_score: number | null
           data_classification: string | null
           department: string | null
@@ -67,6 +69,8 @@ export type Database = {
           availability?: number
           confidentiality?: number
           created_at?: string
+          criticality_approved?: boolean
+          criticality_approved_by?: string | null
           criticality_score?: number | null
           data_classification?: string | null
           department?: string | null
@@ -84,6 +88,8 @@ export type Database = {
           availability?: number
           confidentiality?: number
           created_at?: string
+          criticality_approved?: boolean
+          criticality_approved_by?: string | null
           criticality_score?: number | null
           data_classification?: string | null
           department?: string | null
@@ -115,6 +121,27 @@ export type Database = {
           control_description?: string
           control_id?: string
           control_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          department: string
+          full_name: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string
+          full_name?: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          department?: string
+          full_name?: string
           id?: string
         }
         Relationships: []
@@ -202,14 +229,61 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_all_users: {
+        Args: never
+        Returns: {
+          department: string
+          email: string
+          full_name: string
+          id: string
+          role: string
+        }[]
+      }
+      get_user_role: { Args: never; Returns: string }
+      handle_signup: {
+        Args: { _department?: string; _full_name?: string }
+        Returns: undefined
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      set_user_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _target_user_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
+      app_role: "admin" | "risk_owner" | "user"
       asset_type:
         | "Hardware"
         | "Software"
@@ -353,6 +427,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "risk_owner", "user"],
       asset_type: [
         "Hardware",
         "Software",
