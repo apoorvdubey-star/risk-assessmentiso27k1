@@ -7,14 +7,15 @@ interface AppContextType {
   risks: Risk[];
   settings: AppSettings;
   loading: boolean;
-  addAsset: (asset: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical'>) => Promise<void>;
+  addAsset: (asset: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical' | 'criticalityApproved' | 'criticalityApprovedBy'>) => Promise<void>;
   updateAsset: (asset: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
+  approveAssetCriticality: (assetId: string, userId: string) => Promise<void>;
   addRisk: (risk: Omit<Risk, 'id' | 'riskScore'>) => Promise<void>;
   updateRisk: (risk: Risk) => Promise<void>;
   deleteRisk: (id: string) => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
-  importAssets: (assets: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical'>[]) => Promise<void>;
+  importAssets: (assets: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical' | 'criticalityApproved' | 'criticalityApprovedBy'>[]) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -37,6 +38,8 @@ function mapDbAsset(row: any): Asset {
     availability: row.availability,
     criticalityScore: row.criticality_score ?? 0,
     isCritical: row.is_critical ?? false,
+    criticalityApproved: row.criticality_approved ?? false,
+    criticalityApprovedBy: row.criticality_approved_by ?? null,
   };
 }
 
@@ -97,7 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const addAsset = useCallback(async (asset: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical'>) => {
+  const addAsset = useCallback(async (asset: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical' | 'criticalityApproved' | 'criticalityApprovedBy'>) => {
     const { error } = await supabase.from('assets').insert({
       asset_id: asset.assetId,
       asset_name: asset.assetName,
@@ -133,6 +136,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteAsset = useCallback(async (id: string) => {
     const { error } = await supabase.from('assets').delete().eq('id', id);
+    if (error) throw error;
+    await fetchAll();
+  }, [fetchAll]);
+
+  const approveAssetCriticality = useCallback(async (assetId: string, userId: string) => {
+    const { error } = await supabase.from('assets').update({
+      criticality_approved: true,
+      criticality_approved_by: userId,
+    }).eq('id', assetId);
     if (error) throw error;
     await fetchAll();
   }, [fetchAll]);
@@ -203,7 +215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSettings(newSettings);
   }, [settings, settingsId]);
 
-  const importAssets = useCallback(async (newAssets: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical'>[]) => {
+  const importAssets = useCallback(async (newAssets: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical' | 'criticalityApproved' | 'criticalityApprovedBy'>[]) => {
     const existingIds = new Set(assets.map(a => a.assetId));
     const unique = newAssets.filter(a => !existingIds.has(a.assetId));
     if (unique.length === 0) return;
@@ -225,7 +237,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [assets, fetchAll]);
 
   return (
-    <AppContext.Provider value={{ assets, risks, settings, loading, addAsset, updateAsset, deleteAsset, addRisk, updateRisk, deleteRisk, updateSettings, importAssets, refreshData: fetchAll }}>
+    <AppContext.Provider value={{
+      assets, risks, settings, loading,
+      addAsset, updateAsset, deleteAsset, approveAssetCriticality,
+      addRisk, updateRisk, deleteRisk,
+      updateSettings, importAssets, refreshData: fetchAll,
+    }}>
       {children}
     </AppContext.Provider>
   );

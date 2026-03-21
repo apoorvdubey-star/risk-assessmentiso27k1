@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/context/AuthContext";
 import { Asset, calculateCriticality, isCriticalAsset } from "@/data/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Upload, Search, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Trash2, Upload, Search, Plus, Pencil, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
@@ -19,11 +21,13 @@ const emptyForm = () => ({
 });
 
 export default function AssetRegister() {
-  const { assets, addAsset, deleteAsset, importAssets, loading } = useApp();
+  const { assets, addAsset, updateAsset, deleteAsset, importAssets, approveAssetCriticality, loading } = useApp();
+  const { isAdmin, isRiskOwner, canEdit, user } = useAuth();
   const [form, setForm] = useState(emptyForm());
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState('all');
   const [submitting, setSubmitting] = useState(false);
+  const [editAsset, setEditAsset] = useState<Asset | null>(null);
 
   const departments = useMemo(() => [...new Set(assets.map(a => a.department).filter(Boolean))], [assets]);
 
@@ -49,6 +53,36 @@ export default function AssetRegister() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditSave = async () => {
+    if (!editAsset) return;
+    setSubmitting(true);
+    try {
+      await updateAsset(editAsset);
+      setEditAsset(null);
+      toast.success("Asset updated");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update asset");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleApprove = async (asset: Asset) => {
+    if (!user) return;
+    try {
+      await approveAssetCriticality(asset.id, user.id);
+      toast.success("Criticality approved");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve");
+    }
+  };
+
+  const canEditCIA = (asset: Asset) => {
+    if (isAdmin) return true;
+    if (asset.criticalityApproved) return false;
+    return true;
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,7 +117,7 @@ export default function AssetRegister() {
   };
 
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(assets.map(({ id, ...rest }) => rest));
+    const ws = XLSX.utils.json_to_sheet(assets.map(({ id, criticalityApprovedBy, ...rest }) => rest));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Assets");
     XLSX.writeFile(wb, "asset_register.xlsx");
@@ -152,14 +186,14 @@ export default function AssetRegister() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b bg-muted/50">
-                {['ID', 'Name', 'Type', 'Owner', 'Dept', 'C', 'I', 'A', 'Score', 'Critical', ''].map(h => (
+                {['ID', 'Name', 'Type', 'Owner', 'Dept', 'C', 'I', 'A', 'Score', 'Critical', 'Approved', ''].map(h => (
                   <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={11} className="text-center py-8 text-muted-foreground">No assets found</td></tr>
+                <tr><td colSpan={12} className="text-center py-8 text-muted-foreground">No assets found</td></tr>
               ) : filtered.map(a => (
                 <tr key={a.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-2 font-mono">{a.assetId}</td>
@@ -175,9 +209,27 @@ export default function AssetRegister() {
                     {a.isCritical ? <Badge className="risk-badge-critical text-xs">Yes</Badge> : <Badge variant="outline" className="text-xs">No</Badge>}
                   </td>
                   <td className="px-3 py-2">
-                    <Button variant="ghost" size="sm" onClick={async () => { await deleteAsset(a.id); toast.info("Asset deleted"); }}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
+                    {a.criticalityApproved ? (
+                      <Badge className="bg-risk-low/15 text-risk-low border border-risk-low/30 text-xs">Approved</Badge>
+                    ) : a.isCritical && (isAdmin || isRiskOwner) ? (
+                      <Button variant="outline" size="sm" className="h-6 text-xs" onClick={() => handleApprove(a)}>
+                        <CheckCircle className="h-3 w-3 mr-1" /> Approve
+                      </Button>
+                    ) : (
+                      <Badge variant="outline" className="text-xs">Pending</Badge>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 flex gap-1">
+                    {canEdit && (
+                      <Button variant="ghost" size="sm" onClick={() => setEditAsset({ ...a })}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {(isAdmin || isRiskOwner) && (
+                      <Button variant="ghost" size="sm" onClick={async () => { await deleteAsset(a.id); toast.info("Asset deleted"); }}>
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -186,24 +238,65 @@ export default function AssetRegister() {
         </div>
         <p className="text-xs text-muted-foreground mt-2">{filtered.length} of {assets.length} assets shown</p>
       </div>
+
+      {/* Edit Asset Dialog */}
+      <Dialog open={!!editAsset} onOpenChange={open => !open && setEditAsset(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Asset</DialogTitle></DialogHeader>
+          {editAsset && (
+            <div className="space-y-3">
+              <Field label="Asset ID" value={editAsset.assetId} onChange={v => setEditAsset(p => p ? { ...p, assetId: v } : null)} />
+              <Field label="Asset Name" value={editAsset.assetName} onChange={v => setEditAsset(p => p ? { ...p, assetName: v } : null)} />
+              <div>
+                <Label className="text-xs">Asset Type</Label>
+                <Select value={editAsset.assetType} onValueChange={v => setEditAsset(p => p ? { ...p, assetType: v as Asset['assetType'] } : null)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{ASSET_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <Field label="Classification" value={editAsset.dataClassification} onChange={v => setEditAsset(p => p ? { ...p, dataClassification: v } : null)} />
+              <Field label="Description" value={editAsset.description} onChange={v => setEditAsset(p => p ? { ...p, description: v } : null)} />
+              <Field label="Owner" value={editAsset.assetOwner} onChange={v => setEditAsset(p => p ? { ...p, assetOwner: v } : null)} />
+              <Field label="Department" value={editAsset.department} onChange={v => setEditAsset(p => p ? { ...p, department: v } : null)} />
+              <div className="grid grid-cols-3 gap-2">
+                <NumberField label="C" value={editAsset.confidentiality} onChange={v => setEditAsset(p => p ? { ...p, confidentiality: v } : null)} disabled={!canEditCIA(editAsset)} />
+                <NumberField label="I" value={editAsset.integrity} onChange={v => setEditAsset(p => p ? { ...p, integrity: v } : null)} disabled={!canEditCIA(editAsset)} />
+                <NumberField label="A" value={editAsset.availability} onChange={v => setEditAsset(p => p ? { ...p, availability: v } : null)} disabled={!canEditCIA(editAsset)} />
+              </div>
+              {editAsset.criticalityApproved && !isAdmin && (
+                <p className="text-xs text-risk-medium">⚠ CIA values are locked — criticality has been approved.</p>
+              )}
+              <div className="text-xs text-muted-foreground">
+                Criticality: {calculateCriticality(editAsset.confidentiality, editAsset.integrity, editAsset.availability)}
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={handleEditSave} disabled={submitting} className="flex-1">
+                  {submitting ? 'Saving...' : 'Save Changes'}
+                </Button>
+                <Button variant="outline" onClick={() => setEditAsset(null)} className="flex-1">Cancel</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function Field({ label, value, onChange, required }: { label: string; value: string; onChange: (v: string) => void; required?: boolean }) {
+function Field({ label, value, onChange, required, disabled }: { label: string; value: string; onChange: (v: string) => void; required?: boolean; disabled?: boolean }) {
   return (
     <div>
       <Label className="text-xs">{label}{required && ' *'}</Label>
-      <Input value={value} onChange={e => onChange(e.target.value)} required={required} className="h-8 text-sm" />
+      <Input value={value} onChange={e => onChange(e.target.value)} required={required} disabled={disabled} className="h-8 text-sm" />
     </div>
   );
 }
 
-function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function NumberField({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean }) {
   return (
     <div>
       <Label className="text-xs">{label}</Label>
-      <Input type="number" min={1} max={5} value={value} onChange={e => onChange(Math.min(5, Math.max(1, Number(e.target.value))))} className="h-8 text-sm" />
+      <Input type="number" min={1} max={5} value={value} onChange={e => onChange(Math.min(5, Math.max(1, Number(e.target.value))))} disabled={disabled} className="h-8 text-sm" />
     </div>
   );
 }
