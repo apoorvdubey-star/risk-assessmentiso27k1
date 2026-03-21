@@ -44,7 +44,7 @@ export default function SettingsPage() {
     try {
       const { error } = await supabase.rpc('set_user_role', {
         _target_user_id: userId,
-        _role: newRole,
+        _role: newRole as any,
       });
       if (error) throw error;
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
