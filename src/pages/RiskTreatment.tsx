@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FileDown, Pencil, CalendarIcon, Sparkles, Loader2 } from "lucide-react";
+import { FileDown, Pencil, CalendarIcon, Sparkles, Loader2, LockOpen } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -20,13 +20,23 @@ import * as XLSX from "xlsx";
 
 export default function RiskTreatment() {
   const { risks, assets, settings, updateRisk } = useApp();
-  const { canEdit } = useAuth();
+  const { canEdit, user } = useAuth();
   const [editRisk, setEditRisk] = useState<Risk | null>(null);
   const [saving, setSaving] = useState(false);
   const [aiRemarksLoading, setAiRemarksLoading] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      supabase.from('profiles').select('full_name').eq('id', user.id).single().then(({ data }) => {
+        if (data) setCurrentUserName(data.full_name);
+      });
+    }
+  }, [user]);
 
   const treatable = useMemo(() => risks.filter(r => r.riskScore > settings.riskThreshold), [risks, settings]);
   const getAssetName = (id: string) => assets.find(a => a.id === id)?.assetName || 'Unknown';
+  const isRiskOwnerOfRisk = (r: Risk) => currentUserName && r.riskOwner && r.riskOwner.toLowerCase() === currentUserName.toLowerCase();
 
   const handleAiRemarks = async () => {
     if (!editRisk || !editRisk.managementDecision) {
@@ -130,7 +140,7 @@ export default function RiskTreatment() {
                     <p className="text-xs text-muted-foreground">Threat: {r.threat}</p>
                     <p className="text-xs text-muted-foreground">Vulnerability: {r.vulnerability}</p>
                     <p className="text-xs text-muted-foreground">Asset: {getAssetName(r.linkedAssetId)}</p>
-                    {r.riskScenario && <p className="text-xs text-muted-foreground">Scenario: {r.riskScenario}</p>}
+                    <p className="text-xs text-muted-foreground">Scenario: {r.riskScenario || '—'}</p>
                     {r.consequence && <p className="text-xs text-muted-foreground">Consequence: {r.consequence}</p>}
                     <p className="text-xs text-muted-foreground">Owner: {r.riskOwner || '—'} {r.riskOwnerDepartment ? `(${r.riskOwnerDepartment})` : ''} | Decision: {r.managementDecision || 'Pending'}</p>
                     {r.remarks && <p className="text-xs text-muted-foreground italic">{r.remarks}</p>}
@@ -139,11 +149,20 @@ export default function RiskTreatment() {
                     <Badge className={`risk-badge-${r.riskLevel.toLowerCase()}`}>{r.riskLevel} ({r.riskScore})</Badge>
                     <p className="text-xs text-muted-foreground">Residual: {r.resultantRisk}</p>
                     <Badge variant="outline" className="text-xs">{r.status}</Badge>
-                    {canEdit && (
+                    {r.status === 'Closed' ? (
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant="secondary" className="text-xs">🔒 Treated</Badge>
+                        {isRiskOwnerOfRisk(r) && (
+                          <Button variant="ghost" size="sm" className="mt-1 h-6 text-xs gap-1" onClick={() => setEditRisk({ ...r })}>
+                            <LockOpen className="h-3 w-3" /> Reopen
+                          </Button>
+                        )}
+                      </div>
+                    ) : canEdit ? (
                       <Button variant="outline" size="sm" className="mt-1 h-6 text-xs" onClick={() => setEditRisk({ ...r })}>
                         <Pencil className="h-3 w-3 mr-1" /> Edit
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </CardContent>
