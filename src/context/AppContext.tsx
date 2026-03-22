@@ -47,6 +47,7 @@ function mapDbAsset(row: any): Asset {
 function mapDbRisk(row: any): Risk {
   return {
     id: row.id,
+    riskId: row.risk_id || '',
     linkedAssetId: row.linked_asset_id,
     threat: row.threat,
     vulnerability: row.vulnerability,
@@ -54,7 +55,9 @@ function mapDbRisk(row: any): Risk {
     controlEffectiveness: row.control_effectiveness,
     riskScenario: row.risk_scenario || '',
     consequence: row.consequence || '',
+    riskName: row.risk_name || '',
     riskOwner: row.risk_owner || '',
+    riskOwnerDepartment: row.risk_owner_department || '',
     likelihood: row.likelihood,
     impact: row.impact,
     riskScore: row.risk_score,
@@ -64,6 +67,7 @@ function mapDbRisk(row: any): Risk {
     status: row.status,
     expectedClosureDate: row.expected_closure_date || '',
     remarks: row.remarks || '',
+    createdAt: row.created_at || '',
   };
 }
 
