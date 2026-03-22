@@ -26,14 +26,13 @@ export default function RiskTreatment() {
   const [aiRemarksLoading, setAiRemarksLoading] = useState(false);
   const [currentUserName, setCurrentUserName] = useState('');
 
-  // Load current user's profile name to match against risk owner
-  useState(() => {
+  useEffect(() => {
     if (user) {
       supabase.from('profiles').select('full_name').eq('id', user.id).single().then(({ data }) => {
         if (data) setCurrentUserName(data.full_name);
       });
     }
-  });
+  }, [user]);
 
   const treatable = useMemo(() => risks.filter(r => r.riskScore > settings.riskThreshold), [risks, settings]);
   const getAssetName = (id: string) => assets.find(a => a.id === id)?.assetName || 'Unknown';
