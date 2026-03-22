@@ -156,7 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await fetchAll();
   }, [fetchAll]);
 
-  const addRisk = useCallback(async (risk: Omit<Risk, 'id' | 'riskScore'>) => {
+  const addRisk = useCallback(async (risk: Omit<Risk, 'id' | 'riskScore' | 'riskId' | 'createdAt'>) => {
     const riskScore = risk.likelihood * risk.impact;
     const riskLevel = getRiskLevel(riskScore);
     const { error } = await supabase.from('risks').insert({
@@ -167,7 +167,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       control_effectiveness: risk.controlEffectiveness,
       risk_scenario: risk.riskScenario,
       consequence: risk.consequence,
+      risk_name: risk.riskName || '',
       risk_owner: risk.riskOwner,
+      risk_owner_department: risk.riskOwnerDepartment || '',
       likelihood: risk.likelihood,
       impact: risk.impact,
       risk_level: riskLevel,
