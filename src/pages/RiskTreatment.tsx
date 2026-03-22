@@ -20,7 +20,7 @@ import * as XLSX from "xlsx";
 
 export default function RiskTreatment() {
   const { risks, assets, settings, updateRisk } = useApp();
-  const { canEdit } = useAuth();
+  const { canEdit, user } = useAuth();
   const [editRisk, setEditRisk] = useState<Risk | null>(null);
   const [saving, setSaving] = useState(false);
   const [aiRemarksLoading, setAiRemarksLoading] = useState(false);
