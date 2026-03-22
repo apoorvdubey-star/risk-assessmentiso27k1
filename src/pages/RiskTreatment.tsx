@@ -130,7 +130,7 @@ export default function RiskTreatment() {
                     <p className="text-xs text-muted-foreground">Threat: {r.threat}</p>
                     <p className="text-xs text-muted-foreground">Vulnerability: {r.vulnerability}</p>
                     <p className="text-xs text-muted-foreground">Asset: {getAssetName(r.linkedAssetId)}</p>
-                    {r.riskScenario && <p className="text-xs text-muted-foreground">Scenario: {r.riskScenario}</p>}
+                    <p className="text-xs text-muted-foreground">Scenario: {r.riskScenario || '—'}</p>
                     {r.consequence && <p className="text-xs text-muted-foreground">Consequence: {r.consequence}</p>}
                     <p className="text-xs text-muted-foreground">Owner: {r.riskOwner || '—'} {r.riskOwnerDepartment ? `(${r.riskOwnerDepartment})` : ''} | Decision: {r.managementDecision || 'Pending'}</p>
                     {r.remarks && <p className="text-xs text-muted-foreground italic">{r.remarks}</p>}
