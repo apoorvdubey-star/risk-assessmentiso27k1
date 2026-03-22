@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Risk, calculateResultantRisk, getRiskLevel } from "@/data/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,8 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileDown, Pencil } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FileDown, Pencil, CalendarIcon, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { format, parseISO } from "date-fns";
+import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
 export default function RiskTreatment() {
@@ -18,12 +23,58 @@ export default function RiskTreatment() {
   const { canEdit } = useAuth();
   const [editRisk, setEditRisk] = useState<Risk | null>(null);
   const [saving, setSaving] = useState(false);
+  const [aiRemarksLoading, setAiRemarksLoading] = useState(false);
 
   const treatable = useMemo(() => risks.filter(r => r.riskScore > settings.riskThreshold), [risks, settings]);
   const getAssetName = (id: string) => assets.find(a => a.id === id)?.assetName || 'Unknown';
 
+  const handleAiRemarks = async () => {
+    if (!editRisk || !editRisk.managementDecision) {
+      toast.error("Select a Management Decision first");
+      return;
+    }
+    setAiRemarksLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-treatment-remarks', {
+        body: {
+          managementDecision: editRisk.managementDecision,
+          threat: editRisk.threat,
+          vulnerability: editRisk.vulnerability,
+          riskScenario: editRisk.riskScenario,
+          consequence: editRisk.consequence,
+          riskName: editRisk.riskName,
+        },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      if (data.remarks) {
+        setEditRisk(p => p ? { ...p, remarks: data.remarks } : null);
+        toast.success("AI treatment remarks applied");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "AI remarks failed");
+    } finally {
+      setAiRemarksLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!editRisk) return;
+    if (!editRisk.managementDecision) {
+      toast.error("Management Decision is required");
+      return;
+    }
+    if (!editRisk.expectedClosureDate) {
+      toast.error("Expected Closure Date is required");
+      return;
+    }
+    // Validate closure date >= created date
+    const createdDate = editRisk.createdAt ? new Date(editRisk.createdAt) : new Date();
+    const closureDate = new Date(editRisk.expectedClosureDate);
+    if (closureDate < new Date(createdDate.toDateString())) {
+      toast.error("Expected Closure Date cannot be before the Risk Identified date");
+      return;
+    }
     if (editRisk.status === 'Closed' && !editRisk.managementDecision) {
       toast.error("Cannot close risk without a management decision");
       return;
@@ -44,10 +95,12 @@ export default function RiskTreatment() {
 
   const exportPlan = () => {
     const ws = XLSX.utils.json_to_sheet(treatable.map(r => ({
+      'Risk ID': r.riskId, Risk: r.riskName,
       Asset: getAssetName(r.linkedAssetId), Threat: r.threat, Vulnerability: r.vulnerability,
+      'Risk Scenario': r.riskScenario, Consequence: r.consequence,
       RiskScore: r.riskScore, RiskLevel: r.riskLevel, Decision: r.managementDecision,
       ResidualRisk: r.resultantRisk, Status: r.status, Owner: r.riskOwner,
-      ExpectedClosure: r.expectedClosureDate, Remarks: r.remarks,
+      Department: r.riskOwnerDepartment, ExpectedClosure: r.expectedClosureDate, Remarks: r.remarks,
     })));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Treatment Plan");
@@ -55,7 +108,7 @@ export default function RiskTreatment() {
   };
 
   return (
-    <div className="p-6 split-panel h-full">
+    <div className="p-6 split-panel h-full overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Risk Treatment Plan</h1>
         <Button variant="outline" size="sm" onClick={exportPlan}><FileDown className="h-3 w-3 mr-1" /> Export</Button>
@@ -70,9 +123,16 @@ export default function RiskTreatment() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1 flex-1">
-                    <p className="font-medium text-sm">{r.threat}</p>
-                    <p className="text-xs text-muted-foreground">Asset: {getAssetName(r.linkedAssetId)} | Vulnerability: {r.vulnerability}</p>
-                    <p className="text-xs text-muted-foreground">Owner: {r.riskOwner || '—'} | Decision: {r.managementDecision || 'Pending'}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-primary">{r.riskId}</span>
+                      {r.riskName && <span className="font-medium text-sm">{r.riskName}</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Threat: {r.threat}</p>
+                    <p className="text-xs text-muted-foreground">Vulnerability: {r.vulnerability}</p>
+                    <p className="text-xs text-muted-foreground">Asset: {getAssetName(r.linkedAssetId)}</p>
+                    {r.riskScenario && <p className="text-xs text-muted-foreground">Scenario: {r.riskScenario}</p>}
+                    {r.consequence && <p className="text-xs text-muted-foreground">Consequence: {r.consequence}</p>}
+                    <p className="text-xs text-muted-foreground">Owner: {r.riskOwner || '—'} {r.riskOwnerDepartment ? `(${r.riskOwnerDepartment})` : ''} | Decision: {r.managementDecision || 'Pending'}</p>
                     {r.remarks && <p className="text-xs text-muted-foreground italic">{r.remarks}</p>}
                   </div>
                   <div className="text-right space-y-1 ml-4">
@@ -98,13 +158,20 @@ export default function RiskTreatment() {
           <DialogHeader><DialogTitle>Edit Risk Treatment</DialogTitle></DialogHeader>
           {editRisk && (
             <div className="space-y-3">
-              <div className="p-2 rounded bg-muted text-xs">
+              <div className="p-2 rounded bg-muted text-xs space-y-1">
+                <p><strong>Risk ID:</strong> {editRisk.riskId}</p>
+                <p><strong>Risk:</strong> {editRisk.riskName || '—'}</p>
                 <p><strong>Threat:</strong> {editRisk.threat}</p>
+                <p><strong>Vulnerability:</strong> {editRisk.vulnerability}</p>
+                {editRisk.riskScenario && <p><strong>Scenario:</strong> {editRisk.riskScenario}</p>}
+                {editRisk.consequence && <p><strong>Consequence:</strong> {editRisk.consequence}</p>}
                 <p><strong>Asset:</strong> {getAssetName(editRisk.linkedAssetId)}</p>
                 <p><strong>Risk Score:</strong> {editRisk.riskScore} ({editRisk.riskLevel})</p>
+                <p><strong>Risk Owner:</strong> {editRisk.riskOwner || '—'} {editRisk.riskOwnerDepartment ? `(${editRisk.riskOwnerDepartment})` : ''}</p>
+                {editRisk.createdAt && <p><strong>Risk Identified:</strong> {format(new Date(editRisk.createdAt), 'PPP')}</p>}
               </div>
               <div>
-                <Label className="text-xs">Management Decision</Label>
+                <Label className="text-xs">Management Decision *</Label>
                 <Select value={editRisk.managementDecision || 'none'} onValueChange={v => setEditRisk(p => p ? { ...p, managementDecision: v === 'none' ? '' : v as Risk['managementDecision'] } : null)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -113,17 +180,6 @@ export default function RiskTreatment() {
                     <SelectItem value="Mitigate">Mitigate</SelectItem>
                     <SelectItem value="Transfer">Transfer</SelectItem>
                     <SelectItem value="Accept">Accept</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Control Effectiveness</Label>
-                <Select value={editRisk.controlEffectiveness} onValueChange={v => setEditRisk(p => p ? { ...p, controlEffectiveness: v as Risk['controlEffectiveness'] } : null)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Effective">Effective</SelectItem>
-                    <SelectItem value="Not Effective">Not Effective</SelectItem>
-                    <SelectItem value="NA">N/A</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -139,16 +195,51 @@ export default function RiskTreatment() {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">Risk Owner</Label>
-                <Input value={editRisk.riskOwner} onChange={e => setEditRisk(p => p ? { ...p, riskOwner: e.target.value } : null)} className="h-8 text-sm" />
+                <Label className="text-xs">Expected Closure Date *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-8 text-sm",
+                        !editRisk.expectedClosureDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-3 w-3" />
+                      {editRisk.expectedClosureDate ? format(parseISO(editRisk.expectedClosureDate), "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={editRisk.expectedClosureDate ? parseISO(editRisk.expectedClosureDate) : undefined}
+                      onSelect={date => setEditRisk(p => p ? { ...p, expectedClosureDate: date ? format(date, 'yyyy-MM-dd') : '' } : null)}
+                      disabled={date => {
+                        const minDate = editRisk.createdAt ? new Date(new Date(editRisk.createdAt).toDateString()) : new Date(new Date().toDateString());
+                        return date < minDate;
+                      }}
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
-                <Label className="text-xs">Expected Closure Date</Label>
-                <Input type="date" value={editRisk.expectedClosureDate} onChange={e => setEditRisk(p => p ? { ...p, expectedClosureDate: e.target.value } : null)} className="h-8 text-sm" />
-              </div>
-              <div>
-                <Label className="text-xs">Remarks</Label>
-                <Input value={editRisk.remarks} onChange={e => setEditRisk(p => p ? { ...p, remarks: e.target.value } : null)} className="h-8 text-sm" />
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs">Remarks</Label>
+                  {(editRisk.managementDecision === 'Mitigate' || editRisk.managementDecision === 'Accept') && (
+                    <Button type="button" variant="outline" size="sm" className="h-6 text-xs gap-1" onClick={handleAiRemarks} disabled={aiRemarksLoading}>
+                      {aiRemarksLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                      AI Suggest
+                    </Button>
+                  )}
+                </div>
+                <textarea
+                  value={editRisk.remarks}
+                  onChange={e => setEditRisk(p => p ? { ...p, remarks: e.target.value } : null)}
+                  className="w-full h-20 text-sm rounded-md border border-input bg-background px-3 py-2 text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder="Treatment plan details..."
+                />
               </div>
               <div className="flex gap-2 pt-2">
                 <Button onClick={handleSave} disabled={saving} className="flex-1">{saving ? 'Saving...' : 'Save'}</Button>

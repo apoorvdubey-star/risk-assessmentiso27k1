@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Search, Plus, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
+import { Trash2, Search, Plus, AlertTriangle, Sparkles, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 
 interface DbControl {
@@ -21,9 +21,21 @@ interface AssetOwnerInfo {
   department_name: string;
 }
 
+interface RiskScenario {
+  threat: string;
+  vulnerability: string;
+  riskScenario: string;
+  consequence: string;
+  riskName: string;
+  suggestedLikelihood: number;
+  suggestedImpact: number;
+  selected?: boolean;
+}
+
 const emptyRisk = () => ({
   linkedAssetId: '', threat: '', vulnerability: '', existingControlIds: [] as string[],
-  controlEffectiveness: 'NA' as Risk['controlEffectiveness'], riskScenario: '', consequence: '', riskOwner: '',
+  controlEffectiveness: 'NA' as Risk['controlEffectiveness'], riskScenario: '', consequence: '',
+  riskName: '', riskOwner: '', riskOwnerDepartment: '',
   likelihood: 3, impact: 3, managementDecision: '' as Risk['managementDecision'],
   status: 'Open' as const, expectedClosureDate: '', remarks: '',
   riskLevel: 'Medium' as const, resultantRisk: 0,
@@ -41,8 +53,11 @@ export default function RiskAssessment() {
   const [controls, setControls] = useState<DbControl[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiControlLoading, setAiControlLoading] = useState(false);
+  const [aiEffectivenessLoading, setAiEffectivenessLoading] = useState(false);
   const [industry, setIndustry] = useState('');
   const [assetOwners, setAssetOwners] = useState<AssetOwnerInfo[]>([]);
+  const [aiScenarios, setAiScenarios] = useState<RiskScenario[]>([]);
+  const [showScenarios, setShowScenarios] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -61,16 +76,18 @@ export default function RiskAssessment() {
     });
   }, []);
 
-  // Auto-set risk owner from asset owners when asset is selected
+  // Auto-set risk owner from asset owner when asset is selected
   useEffect(() => {
     if (!form.linkedAssetId) return;
     const asset = assets.find(a => a.id === form.linkedAssetId);
     if (!asset) return;
-    const owner = assetOwners.find(o => o.department_name === asset.department);
-    if (owner) {
-      setForm(p => ({ ...p, riskOwner: owner.name }));
-    }
-  }, [form.linkedAssetId, assets, assetOwners]);
+    // Set risk owner to asset owner and department
+    setForm(p => ({
+      ...p,
+      riskOwner: asset.assetOwner || '',
+      riskOwnerDepartment: asset.department || '',
+    }));
+  }, [form.linkedAssetId, assets]);
 
   const filteredControls = useMemo(() =>
     controls.filter(c =>
@@ -82,16 +99,16 @@ export default function RiskAssessment() {
 
   const filtered = useMemo(() => {
     return risks.filter(r => {
-      const matchSearch = !search || r.threat.toLowerCase().includes(search.toLowerCase()) || r.vulnerability.toLowerCase().includes(search.toLowerCase());
+      const matchSearch = !search || r.threat.toLowerCase().includes(search.toLowerCase()) || r.vulnerability.toLowerCase().includes(search.toLowerCase()) || r.riskId?.toLowerCase().includes(search.toLowerCase());
       const matchLevel = filterLevel === 'all' || r.riskLevel === filterLevel;
       const matchStatus = filterStatus === 'all' || r.status === filterStatus;
       return matchSearch && matchLevel && matchStatus;
     });
   }, [risks, search, filterLevel, filterStatus]);
 
-  const handleAiSuggest = async () => {
-    if (!form.linkedAssetId || !form.threat) {
-      toast.error("Select an asset and enter a threat first");
+  const handleAiMultiSuggest = async () => {
+    if (!form.linkedAssetId) {
+      toast.error("Select a critical asset first");
       return;
     }
     const asset = assets.find(a => a.id === form.linkedAssetId);
@@ -99,32 +116,44 @@ export default function RiskAssessment() {
 
     setAiLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('ai-risk-suggest', {
+      const { data, error } = await supabase.functions.invoke('ai-risk-multi-suggest', {
         body: {
           assetName: asset.assetName,
           assetType: asset.assetType,
           department: asset.department,
-          threat: form.threat,
+          threat: form.threat || '',
           industry,
         },
       });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      setForm(p => ({
-        ...p,
-        vulnerability: data.vulnerability || p.vulnerability,
-        consequence: data.consequence || p.consequence,
-        riskScenario: data.riskScenario || p.riskScenario,
-        likelihood: data.suggestedLikelihood || p.likelihood,
-        impact: data.suggestedImpact || p.impact,
-      }));
-      toast.success("AI suggestions applied");
+      const scenarios = (data.scenarios || []).map((s: any) => ({ ...s, selected: false }));
+      setAiScenarios(scenarios);
+      setShowScenarios(true);
+      toast.success(`AI generated ${scenarios.length} risk scenarios`);
     } catch (err: any) {
       toast.error(err.message || "AI suggestion failed");
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const selectScenario = (index: number) => {
+    const scenario = aiScenarios[index];
+    setForm(p => ({
+      ...p,
+      threat: scenario.threat,
+      vulnerability: scenario.vulnerability,
+      riskScenario: scenario.riskScenario,
+      consequence: scenario.consequence,
+      riskName: scenario.riskName,
+      likelihood: scenario.suggestedLikelihood,
+      impact: scenario.suggestedImpact,
+    }));
+    setAiScenarios(prev => prev.map((s, i) => ({ ...s, selected: i === index })));
+    setShowScenarios(false);
+    toast.success("Scenario selected — you can edit the fields below");
   };
 
   const handleAiControlSuggest = async () => {
@@ -150,6 +179,26 @@ export default function RiskAssessment() {
       );
       setSelectedControls(suggestedIds);
       toast.success(`AI suggested ${suggestedIds.length} controls`);
+
+      // Auto-assess effectiveness
+      if (suggestedIds.length > 0) {
+        setAiEffectivenessLoading(true);
+        try {
+          const { data: assessData, error: assessError } = await supabase.functions.invoke('ai-control-assess', {
+            body: {
+              threat: form.threat,
+              vulnerability: form.vulnerability,
+              controlIds: suggestedIds,
+              industry,
+            },
+          });
+          if (!assessError && assessData?.effectiveness) {
+            setForm(p => ({ ...p, controlEffectiveness: assessData.effectiveness as Risk['controlEffectiveness'] }));
+            toast.success(`Controls assessed as: ${assessData.effectiveness}`);
+          }
+        } catch { /* ignore assessment error */ }
+        finally { setAiEffectivenessLoading(false); }
+      }
     } catch (err: any) {
       toast.error(err.message || "AI control suggestion failed");
     } finally {
@@ -171,6 +220,8 @@ export default function RiskAssessment() {
       });
       setForm(emptyRisk());
       setSelectedControls([]);
+      setAiScenarios([]);
+      setShowScenarios(false);
       toast.success("Risk added");
     } catch (err: any) {
       toast.error(err.message || "Failed to add risk");
@@ -188,7 +239,7 @@ export default function RiskAssessment() {
 
   return (
     <div className="flex h-full">
-      <div className="w-[420px] border-r p-4 split-panel shrink-0">
+      <div className="w-[420px] border-r p-4 split-panel shrink-0 overflow-y-auto">
         <Card>
           <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Plus className="h-4 w-4" /> Add Risk</CardTitle></CardHeader>
           <CardContent>
@@ -204,21 +255,45 @@ export default function RiskAssessment() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs">Threat *</Label><Input value={form.threat} onChange={e => setForm(p => ({ ...p, threat: e.target.value }))} className="h-8 text-sm" required /></div>
-              
-              {/* AI Auto-populate button */}
+
+              {/* AI Multi-suggest */}
               <Button
                 type="button" variant="outline" size="sm" className="w-full text-xs gap-1.5"
-                onClick={handleAiSuggest} disabled={aiLoading || !form.linkedAssetId || !form.threat}
+                onClick={handleAiMultiSuggest} disabled={aiLoading || !form.linkedAssetId}
               >
                 {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                {aiLoading ? "Generating suggestions..." : "AI Auto-populate"}
+                {aiLoading ? "Generating scenarios..." : "AI Generate Risk Scenarios"}
               </Button>
 
+              {/* AI Scenarios selection */}
+              {showScenarios && aiScenarios.length > 0 && (
+                <div className="border rounded p-2 space-y-2 bg-muted/30 max-h-48 overflow-y-auto">
+                  <p className="text-xs font-medium text-muted-foreground">Select a risk scenario:</p>
+                  {aiScenarios.map((s, i) => (
+                    <div
+                      key={i}
+                      className={`p-2 rounded border cursor-pointer hover:bg-accent/50 text-xs transition-colors ${s.selected ? 'border-primary bg-primary/10' : ''}`}
+                      onClick={() => selectScenario(i)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium">{s.riskName}</p>
+                          <p className="text-muted-foreground mt-0.5">{s.threat}</p>
+                        </div>
+                        {s.selected && <Check className="h-4 w-4 text-primary shrink-0" />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div><Label className="text-xs">Risk Name</Label><Input value={form.riskName} onChange={e => setForm(p => ({ ...p, riskName: e.target.value }))} className="h-8 text-sm" placeholder="e.g. Firewall Breach Risk" /></div>
+              <div><Label className="text-xs">Threat *</Label><Input value={form.threat} onChange={e => setForm(p => ({ ...p, threat: e.target.value }))} className="h-8 text-sm" required /></div>
               <div><Label className="text-xs">Vulnerability *</Label><Input value={form.vulnerability} onChange={e => setForm(p => ({ ...p, vulnerability: e.target.value }))} className="h-8 text-sm" required /></div>
               <div><Label className="text-xs">Risk Scenario</Label><Input value={form.riskScenario} onChange={e => setForm(p => ({ ...p, riskScenario: e.target.value }))} className="h-8 text-sm" /></div>
               <div><Label className="text-xs">Consequence</Label><Input value={form.consequence} onChange={e => setForm(p => ({ ...p, consequence: e.target.value }))} className="h-8 text-sm" /></div>
-              <div><Label className="text-xs">Risk Owner</Label><Input value={form.riskOwner} onChange={e => setForm(p => ({ ...p, riskOwner: e.target.value }))} className="h-8 text-sm" /></div>
+              <div><Label className="text-xs">Risk Owner</Label><Input value={form.riskOwner} readOnly className="h-8 text-sm bg-muted" /></div>
+              <div><Label className="text-xs">Department</Label><Input value={form.riskOwnerDepartment} readOnly className="h-8 text-sm bg-muted" /></div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-xs">Likelihood (1-5)</Label>
@@ -258,7 +333,10 @@ export default function RiskAssessment() {
                 {selectedControls.length > 0 && <p className="text-xs text-muted-foreground mt-1">{selectedControls.length} controls selected</p>}
               </div>
               <div>
-                <Label className="text-xs">Control Effectiveness</Label>
+                <Label className="text-xs flex items-center gap-1">
+                  Control Effectiveness
+                  {aiEffectivenessLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                </Label>
                 <Select value={form.controlEffectiveness} onValueChange={v => setForm(p => ({ ...p, controlEffectiveness: v as Risk['controlEffectiveness'] }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -268,26 +346,13 @@ export default function RiskAssessment() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-xs">Management Decision</Label>
-                <Select value={form.managementDecision || 'none'} onValueChange={v => setForm(p => ({ ...p, managementDecision: v === 'none' ? '' : v as Risk['managementDecision'] }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Select...</SelectItem>
-                    <SelectItem value="Avoid">Avoid</SelectItem>
-                    <SelectItem value="Mitigate">Mitigate</SelectItem>
-                    <SelectItem value="Transfer">Transfer</SelectItem>
-                    <SelectItem value="Accept">Accept</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div><Label className="text-xs">Remarks</Label><Input value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} className="h-8 text-sm" /></div>
               <Button type="submit" className="w-full"><AlertTriangle className="h-3 w-3 mr-1" /> Add Risk</Button>
             </form>
           </CardContent>
         </Card>
       </div>
-      <div className="flex-1 p-4 split-panel">
+      <div className="flex-1 p-4 split-panel overflow-y-auto">
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -312,7 +377,7 @@ export default function RiskAssessment() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b bg-muted/50">
-                {['Asset', 'Threat', 'Vulnerability', 'L', 'I', 'Score', 'Level', 'Decision', 'Residual', 'Status', ''].map(h => (
+                {['Risk ID', 'Risk', 'Asset', 'Threat', 'L', 'I', 'Score', 'Level', 'Owner', 'Status', ''].map(h => (
                   <th key={h} className="px-2 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -322,15 +387,15 @@ export default function RiskAssessment() {
                 <tr><td colSpan={11} className="text-center py-8 text-muted-foreground">No risks found</td></tr>
               ) : filtered.map(r => (
                 <tr key={r.id} className={`border-b hover:bg-muted/30 transition-colors ${r.status === 'Open' && (r.riskLevel === 'High' || r.riskLevel === 'Critical') ? 'bg-risk-critical/5' : ''}`}>
+                  <td className="px-2 py-2 font-mono text-primary">{r.riskId}</td>
+                  <td className="px-2 py-2 max-w-24 truncate" title={r.riskName}>{r.riskName || '—'}</td>
                   <td className="px-2 py-2">{getAssetName(r.linkedAssetId)}</td>
-                  <td className="px-2 py-2 max-w-32 truncate">{r.threat}</td>
-                  <td className="px-2 py-2 max-w-32 truncate">{r.vulnerability}</td>
+                  <td className="px-2 py-2 max-w-28 truncate">{r.threat}</td>
                   <td className="px-2 py-2">{r.likelihood}</td>
                   <td className="px-2 py-2">{r.impact}</td>
                   <td className="px-2 py-2 font-bold">{r.riskScore}</td>
                   <td className="px-2 py-2"><Badge className={`risk-badge-${r.riskLevel.toLowerCase()} text-xs`}>{r.riskLevel}</Badge></td>
-                  <td className="px-2 py-2">{r.managementDecision || '—'}</td>
-                  <td className="px-2 py-2">{r.resultantRisk}</td>
+                  <td className="px-2 py-2">{r.riskOwner || '—'}</td>
                   <td className="px-2 py-2"><Badge variant="outline" className="text-xs">{r.status}</Badge></td>
                   <td className="px-2 py-2">
                     <Button variant="ghost" size="sm" onClick={async () => { await deleteRisk(r.id); toast.info("Risk deleted"); }}>
