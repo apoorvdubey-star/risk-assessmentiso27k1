@@ -1,0 +1,1 @@
+ALTER TABLE public.org_setup ADD COLUMN IF NOT EXISTS default_data_classification text DEFAULT '';

@@ -91,6 +91,7 @@ export type Database = {
           id: string
           integrity: number
           is_critical: boolean | null
+          location: string | null
           updated_at: string
         }
         Insert: {
@@ -110,6 +111,7 @@ export type Database = {
           id?: string
           integrity?: number
           is_critical?: boolean | null
+          location?: string | null
           updated_at?: string
         }
         Update: {
@@ -129,6 +131,7 @@ export type Database = {
           id?: string
           integrity?: number
           is_critical?: boolean | null
+          location?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -178,6 +181,7 @@ export type Database = {
       org_setup: {
         Row: {
           created_at: string
+          default_data_classification: string | null
           id: string
           industry: string
           org_name: string
@@ -186,6 +190,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          default_data_classification?: string | null
           id?: string
           industry?: string
           org_name?: string
@@ -194,6 +199,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          default_data_classification?: string | null
           id?: string
           industry?: string
           org_name?: string
