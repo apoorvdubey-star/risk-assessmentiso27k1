@@ -40,12 +40,12 @@ export default function AssetRegister() {
     Promise.all([
       supabase.from('departments').select('name').order('name'),
       supabase.from('asset_owners').select('name, departments(name)'),
-      supabase.from('org_setup').select('industry, default_data_classification').limit(1).single(),
+      supabase.from('org_setup').select('*').limit(1).single(),
     ]).then(([deptRes, ownerRes, orgRes]) => {
       if (deptRes.data) setOrgDepartments(deptRes.data.map(d => d.name));
       if (ownerRes.data) setOrgOwners(ownerRes.data.map((o: any) => ({ name: o.name, department: (o.departments as any)?.name || '' })));
       if (orgRes.data) {
-        setIndustry(orgRes.data.industry || '');
+        setIndustry((orgRes.data as any).industry || '');
         const dc = (orgRes.data as any).default_data_classification || '';
         setDefaultClassification(dc);
         if (dc) setForm(p => ({ ...p, dataClassification: dc }));
