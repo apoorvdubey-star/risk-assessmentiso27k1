@@ -11,7 +11,7 @@ interface AppContextType {
   updateAsset: (asset: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   approveAssetCriticality: (assetId: string, userId: string) => Promise<void>;
-  addRisk: (risk: Omit<Risk, 'id' | 'riskScore'>) => Promise<void>;
+  addRisk: (risk: Omit<Risk, 'id' | 'riskScore' | 'riskId' | 'createdAt'>) => Promise<void>;
   updateRisk: (risk: Risk) => Promise<void>;
   deleteRisk: (id: string) => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
