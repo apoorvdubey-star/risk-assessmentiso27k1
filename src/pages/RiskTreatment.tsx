@@ -139,11 +139,13 @@ export default function RiskTreatment() {
                     <Badge className={`risk-badge-${r.riskLevel.toLowerCase()}`}>{r.riskLevel} ({r.riskScore})</Badge>
                     <p className="text-xs text-muted-foreground">Residual: {r.resultantRisk}</p>
                     <Badge variant="outline" className="text-xs">{r.status}</Badge>
-                    {canEdit && (
+                    {r.status === 'Closed' ? (
+                      <Badge variant="secondary" className="mt-1 text-xs">🔒 Treated</Badge>
+                    ) : canEdit ? (
                       <Button variant="outline" size="sm" className="mt-1 h-6 text-xs" onClick={() => setEditRisk({ ...r })}>
                         <Pencil className="h-3 w-3 mr-1" /> Edit
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </CardContent>
