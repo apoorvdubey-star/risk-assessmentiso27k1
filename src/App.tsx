@@ -16,6 +16,8 @@ import ControlsLibrary from "./pages/ControlsLibrary";
 import Reports from "./pages/Reports";
 import SettingsPage from "./pages/SettingsPage";
 import RiskMatrix from "./pages/RiskMatrix";
+import FAQPage from "./pages/FAQPage";
+import AboutPage from "./pages/AboutPage";
 import NotFound from "./pages/NotFound";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
