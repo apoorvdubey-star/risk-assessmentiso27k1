@@ -11,7 +11,7 @@ interface AppContextType {
   updateAsset: (asset: Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   approveAssetCriticality: (assetId: string, userId: string) => Promise<void>;
-  addRisk: (risk: Omit<Risk, 'id' | 'riskScore'>) => Promise<void>;
+  addRisk: (risk: Omit<Risk, 'id' | 'riskScore' | 'riskId' | 'createdAt'>) => Promise<void>;
   updateRisk: (risk: Risk) => Promise<void>;
   deleteRisk: (id: string) => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
@@ -47,6 +47,7 @@ function mapDbAsset(row: any): Asset {
 function mapDbRisk(row: any): Risk {
   return {
     id: row.id,
+    riskId: row.risk_id || '',
     linkedAssetId: row.linked_asset_id,
     threat: row.threat,
     vulnerability: row.vulnerability,
@@ -54,7 +55,9 @@ function mapDbRisk(row: any): Risk {
     controlEffectiveness: row.control_effectiveness,
     riskScenario: row.risk_scenario || '',
     consequence: row.consequence || '',
+    riskName: row.risk_name || '',
     riskOwner: row.risk_owner || '',
+    riskOwnerDepartment: row.risk_owner_department || '',
     likelihood: row.likelihood,
     impact: row.impact,
     riskScore: row.risk_score,
@@ -64,6 +67,7 @@ function mapDbRisk(row: any): Risk {
     status: row.status,
     expectedClosureDate: row.expected_closure_date || '',
     remarks: row.remarks || '',
+    createdAt: row.created_at || '',
   };
 }
 
@@ -152,7 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await fetchAll();
   }, [fetchAll]);
 
-  const addRisk = useCallback(async (risk: Omit<Risk, 'id' | 'riskScore'>) => {
+  const addRisk = useCallback(async (risk: Omit<Risk, 'id' | 'riskScore' | 'riskId' | 'createdAt'>) => {
     const riskScore = risk.likelihood * risk.impact;
     const riskLevel = getRiskLevel(riskScore);
     const { error } = await supabase.from('risks').insert({
@@ -163,7 +167,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       control_effectiveness: risk.controlEffectiveness,
       risk_scenario: risk.riskScenario,
       consequence: risk.consequence,
+      risk_name: risk.riskName || '',
       risk_owner: risk.riskOwner,
+      risk_owner_department: risk.riskOwnerDepartment || '',
       likelihood: risk.likelihood,
       impact: risk.impact,
       risk_level: riskLevel,
@@ -188,7 +194,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       control_effectiveness: risk.controlEffectiveness,
       risk_scenario: risk.riskScenario,
       consequence: risk.consequence,
+      risk_name: risk.riskName || '',
       risk_owner: risk.riskOwner,
+      risk_owner_department: risk.riskOwnerDepartment || '',
       likelihood: risk.likelihood,
       impact: risk.impact,
       risk_level: riskLevel,

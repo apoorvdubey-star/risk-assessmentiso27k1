@@ -263,8 +263,11 @@ export type Database = {
             | null
           remarks: string | null
           resultant_risk: number
+          risk_id: string | null
           risk_level: Database["public"]["Enums"]["risk_level"]
+          risk_name: string | null
           risk_owner: string | null
+          risk_owner_department: string | null
           risk_scenario: string | null
           risk_score: number | null
           status: Database["public"]["Enums"]["risk_status"]
@@ -287,8 +290,11 @@ export type Database = {
             | null
           remarks?: string | null
           resultant_risk?: number
+          risk_id?: string | null
           risk_level?: Database["public"]["Enums"]["risk_level"]
+          risk_name?: string | null
           risk_owner?: string | null
+          risk_owner_department?: string | null
           risk_scenario?: string | null
           risk_score?: number | null
           status?: Database["public"]["Enums"]["risk_status"]
@@ -311,8 +317,11 @@ export type Database = {
             | null
           remarks?: string | null
           resultant_risk?: number
+          risk_id?: string | null
           risk_level?: Database["public"]["Enums"]["risk_level"]
+          risk_name?: string | null
           risk_owner?: string | null
+          risk_owner_department?: string | null
           risk_scenario?: string | null
           risk_score?: number | null
           status?: Database["public"]["Enums"]["risk_status"]

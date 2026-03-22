@@ -19,6 +19,7 @@ export interface Asset {
 
 export interface Risk {
   id: string;
+  riskId: string;
   linkedAssetId: string;
   threat: string;
   vulnerability: string;
@@ -26,7 +27,9 @@ export interface Risk {
   controlEffectiveness: 'Effective' | 'Not Effective' | 'NA';
   riskScenario: string;
   consequence: string;
+  riskName: string;
   riskOwner: string;
+  riskOwnerDepartment: string;
   likelihood: number;
   impact: number;
   riskScore: number;
@@ -36,6 +39,7 @@ export interface Risk {
   status: 'Open' | 'Closed' | 'WIP';
   expectedClosureDate: string;
   remarks: string;
+  createdAt: string;
 }
 
 export interface Control {
