@@ -151,7 +151,14 @@ export default function RiskTreatment() {
                     <p className="text-xs text-muted-foreground">Residual: {r.resultantRisk}</p>
                     <Badge variant="outline" className="text-xs">{r.status}</Badge>
                     {r.status === 'Closed' ? (
-                      <Badge variant="secondary" className="mt-1 text-xs">🔒 Treated</Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant="secondary" className="text-xs">🔒 Treated</Badge>
+                        {isRiskOwnerOfRisk(r) && (
+                          <Button variant="ghost" size="sm" className="mt-1 h-6 text-xs gap-1" onClick={() => setEditRisk({ ...r })}>
+                            <LockOpen className="h-3 w-3" /> Reopen
+                          </Button>
+                        )}
+                      </div>
                     ) : canEdit ? (
                       <Button variant="outline" size="sm" className="mt-1 h-6 text-xs" onClick={() => setEditRisk({ ...r })}>
                         <Pencil className="h-3 w-3 mr-1" /> Edit
