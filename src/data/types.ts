@@ -7,6 +7,7 @@ export interface Asset {
   description: string;
   assetOwner: string;
   department: string;
+  location: string;
   confidentiality: number;
   integrity: number;
   availability: number;

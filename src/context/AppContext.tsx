@@ -33,6 +33,7 @@ function mapDbAsset(row: any): Asset {
     description: row.description || '',
     assetOwner: row.asset_owner || '',
     department: row.department || '',
+    location: row.location || '',
     confidentiality: row.confidentiality,
     integrity: row.integrity,
     availability: row.availability,
@@ -56,7 +57,7 @@ function mapDbRisk(row: any): Risk {
     riskOwner: row.risk_owner || '',
     likelihood: row.likelihood,
     impact: row.impact,
-    riskScore: row.risk_score ?? 0,
+    riskScore: row.risk_score,
     riskLevel: row.risk_level,
     managementDecision: row.management_decision || '',
     resultantRisk: row.resultant_risk,
@@ -109,6 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       description: asset.description,
       asset_owner: asset.assetOwner,
       department: asset.department,
+      location: (asset as any).location || '',
       confidentiality: asset.confidentiality,
       integrity: asset.integrity,
       availability: asset.availability,
@@ -126,6 +128,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       description: asset.description,
       asset_owner: asset.assetOwner,
       department: asset.department,
+      location: asset.location || '',
       confidentiality: asset.confidentiality,
       integrity: asset.integrity,
       availability: asset.availability,
@@ -163,11 +166,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       risk_owner: risk.riskOwner,
       likelihood: risk.likelihood,
       impact: risk.impact,
+      risk_score: riskScore,
       risk_level: riskLevel,
-      management_decision: risk.managementDecision || null,
+      management_decision: risk.managementDecision,
       resultant_risk: risk.resultantRisk,
       status: risk.status,
-      expected_closure_date: risk.expectedClosureDate || null,
+      expected_closure_date: risk.expectedClosureDate,
       remarks: risk.remarks,
     });
     if (error) throw error;
@@ -175,7 +179,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [fetchAll]);
 
   const updateRisk = useCallback(async (risk: Risk) => {
-    const riskLevel = getRiskLevel(risk.likelihood * risk.impact);
+    const riskScore = risk.likelihood * risk.impact;
+    const riskLevel = getRiskLevel(riskScore);
     const { error } = await supabase.from('risks').update({
       linked_asset_id: risk.linkedAssetId,
       threat: risk.threat,
@@ -187,11 +192,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       risk_owner: risk.riskOwner,
       likelihood: risk.likelihood,
       impact: risk.impact,
+      risk_score: riskScore,
       risk_level: riskLevel,
-      management_decision: risk.managementDecision || null,
+      management_decision: risk.managementDecision,
       resultant_risk: risk.resultantRisk,
       status: risk.status,
-      expected_closure_date: risk.expectedClosureDate || null,
+      expected_closure_date: risk.expectedClosureDate,
       remarks: risk.remarks,
     }).eq('id', risk.id);
     if (error) throw error;
@@ -204,45 +210,76 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await fetchAll();
   }, [fetchAll]);
 
-  const updateSettings = useCallback(async (partial: Partial<AppSettings>) => {
-    const newSettings = { ...settings, ...partial };
-    const { error } = await supabase.from('app_settings').update({
-      risk_matrix_type: newSettings.riskMatrixType,
-      risk_threshold: newSettings.riskThreshold,
-      risk_reduction_percent: newSettings.riskReductionPercent,
-    }).eq('id', settingsId);
-    if (error) throw error;
-    setSettings(newSettings);
-  }, [settings, settingsId]);
-
-  const importAssets = useCallback(async (newAssets: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical' | 'criticalityApproved' | 'criticalityApprovedBy'>[]) => {
-    const existingIds = new Set(assets.map(a => a.assetId));
-    const unique = newAssets.filter(a => !existingIds.has(a.assetId));
-    if (unique.length === 0) return;
-    const rows = unique.map(a => ({
-      asset_id: a.assetId,
-      asset_name: a.assetName,
-      asset_type: a.assetType,
-      data_classification: a.dataClassification,
-      description: a.description,
-      asset_owner: a.assetOwner,
-      department: a.department,
-      confidentiality: a.confidentiality,
-      integrity: a.integrity,
-      availability: a.availability,
-    }));
-    const { error } = await supabase.from('assets').insert(rows);
+  const updateSettings = useCallback(async (newSettings: Partial<AppSettings>) => {
+    const { error } = await supabase.from('app_settings').upsert(
+      {
+        id: settingsId,
+        risk_matrix_type: newSettings.riskMatrixType,
+        risk_threshold: newSettings.riskThreshold,
+        risk_reduction_percent: newSettings.riskReductionPercent,
+      },
+      { onConflict: 'id' }
+    );
     if (error) throw error;
     await fetchAll();
-  }, [assets, fetchAll]);
+  }, [fetchAll, settingsId]);
+
+  const importAssets = useCallback(async (assetsToImport: Omit<Asset, 'id' | 'criticalityScore' | 'isCritical' | 'criticalityApproved' | 'criticalityApprovedBy'>[]) => {
+    const { error } = await supabase.from('assets').insert(assetsToImport.map(asset => ({
+      asset_id: asset.assetId,
+      asset_name: asset.assetName,
+      asset_type: asset.assetType,
+      data_classification: asset.dataClassification,
+      description: asset.description,
+      asset_owner: asset.assetOwner,
+      department: asset.department,
+      location: asset.location,
+      confidentiality: asset.confidentiality,
+      integrity: asset.integrity,
+      availability: asset.availability,
+    })));
+    if (error) throw error;
+    await fetchAll();
+  }, [fetchAll]);
+
+  const refreshData = useCallback(async () => {
+    await fetchAll();
+  }, [fetchAll]);
+
+  const contextValue = useMemo(() => ({
+    assets,
+    risks,
+    settings,
+    loading,
+    addAsset,
+    updateAsset,
+    deleteAsset,
+    approveAssetCriticality,
+    addRisk,
+    updateRisk,
+    deleteRisk,
+    updateSettings,
+    importAssets,
+    refreshData,
+  }), [
+    assets,
+    risks,
+    settings,
+    loading,
+    addAsset,
+    updateAsset,
+    deleteAsset,
+    approveAssetCriticality,
+    addRisk,
+    updateRisk,
+    deleteRisk,
+    updateSettings,
+    importAssets,
+    refreshData,
+  ]);
 
   return (
-    <AppContext.Provider value={{
-      assets, risks, settings, loading,
-      addAsset, updateAsset, deleteAsset, approveAssetCriticality,
-      addRisk, updateRisk, deleteRisk,
-      updateSettings, importAssets, refreshData: fetchAll,
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

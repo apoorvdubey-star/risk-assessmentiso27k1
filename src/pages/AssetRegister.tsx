@@ -10,15 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Trash2, Upload, Search, Plus, Pencil, CheckCircle } from "lucide-react";
+import { Trash2, Upload, Search, Plus, Pencil, CheckCircle, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
 const ASSET_TYPES = ['Hardware', 'Software', 'Service', 'People', 'Data', 'Others'] as const;
+const DATA_CLASSIFICATIONS = ['Internal', 'Confidential', 'Restricted', 'Public'] as const;
 
 const emptyForm = () => ({
   assetId: '', assetName: '', assetType: 'Hardware' as Asset['assetType'], dataClassification: '', description: '',
-  assetOwner: '', department: '', confidentiality: 3, integrity: 3, availability: 3,
+  assetOwner: '', department: '', location: '', confidentiality: 3, integrity: 3, availability: 3,
 });
 
 export default function AssetRegister() {
@@ -31,14 +32,24 @@ export default function AssetRegister() {
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [orgDepartments, setOrgDepartments] = useState<string[]>([]);
   const [orgOwners, setOrgOwners] = useState<{ name: string; department: string }[]>([]);
+  const [industry, setIndustry] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [defaultClassification, setDefaultClassification] = useState('');
 
   useEffect(() => {
     Promise.all([
       supabase.from('departments').select('name').order('name'),
       supabase.from('asset_owners').select('name, departments(name)'),
-    ]).then(([deptRes, ownerRes]) => {
+      supabase.from('org_setup').select('industry, default_data_classification').limit(1).single(),
+    ]).then(([deptRes, ownerRes, orgRes]) => {
       if (deptRes.data) setOrgDepartments(deptRes.data.map(d => d.name));
       if (ownerRes.data) setOrgOwners(ownerRes.data.map((o: any) => ({ name: o.name, department: (o.departments as any)?.name || '' })));
+      if (orgRes.data) {
+        setIndustry(orgRes.data.industry || '');
+        const dc = (orgRes.data as any).default_data_classification || '';
+        setDefaultClassification(dc);
+        if (dc) setForm(p => ({ ...p, dataClassification: dc }));
+      }
     });
   }, []);
 
@@ -47,12 +58,20 @@ export default function AssetRegister() {
     return [...new Set([...orgDepartments, ...fromAssets])];
   }, [assets, orgDepartments]);
 
-  // Filter owners by selected department
   const availableOwners = useMemo(() => {
     const dept = form.department || (editAsset?.department);
     if (!dept) return orgOwners;
     return orgOwners.filter(o => o.department === dept);
   }, [form.department, editAsset?.department, orgOwners]);
+
+  // Auto-set department when owner is selected (add form)
+  useEffect(() => {
+    if (!form.assetOwner) return;
+    const owner = orgOwners.find(o => o.name === form.assetOwner);
+    if (owner && owner.department && owner.department !== form.department) {
+      setForm(p => ({ ...p, department: owner.department }));
+    }
+  }, [form.assetOwner, orgOwners]);
 
   const filtered = useMemo(() => {
     return assets.filter(a => {
@@ -62,14 +81,37 @@ export default function AssetRegister() {
     });
   }, [assets, search, filterDept]);
 
+  const handleAiDescribe = async () => {
+    if (!form.assetName) { toast.error("Enter an asset name first"); return; }
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-asset-describe', {
+        body: { assetName: form.assetName, assetType: form.assetType, industry },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      setForm(p => ({
+        ...p,
+        description: data.description || p.description,
+        dataClassification: data.suggestedClassification || p.dataClassification,
+      }));
+      toast.success("AI description applied");
+    } catch (err: any) {
+      toast.error(err.message || "AI description failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.assetId || !form.assetName) { toast.error("Asset ID and Name are required"); return; }
+    if (!form.location) { toast.error("Location is required"); return; }
     if (assets.some(a => a.assetId === form.assetId)) { toast.error("Asset ID already exists"); return; }
     setSubmitting(true);
     try {
       await addAsset(form);
-      setForm(emptyForm());
+      setForm({ ...emptyForm(), dataClassification: defaultClassification });
       toast.success("Asset added");
     } catch (err: any) {
       toast.error(err.message || "Failed to add asset");
@@ -124,10 +166,11 @@ export default function AssetRegister() {
             assetId: String(row['Asset ID'] || row['assetId'] || ''),
             assetName: String(row['Asset Name'] || row['assetName'] || row['Name'] || ''),
             assetType: (String(row['Asset Type'] || row['assetType'] || row['Type'] || 'Others')) as Asset['assetType'],
-            dataClassification: String(row['Classification'] || row['dataClassification'] || ''),
+            dataClassification: String(row['Classification'] || row['dataClassification'] || defaultClassification || ''),
             description: String(row['Description'] || row['description'] || ''),
             assetOwner: String(row['Owner'] || row['assetOwner'] || ''),
             department: String(row['Department'] || row['department'] || ''),
+            location: String(row['Location'] || row['location'] || ''),
             confidentiality: c, integrity: i, availability: a,
           };
         }).filter(a => a.assetId && a.assetName);
@@ -157,6 +200,14 @@ export default function AssetRegister() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <Field label="Asset ID" value={form.assetId} onChange={v => setForm(p => ({ ...p, assetId: v }))} required />
               <Field label="Asset Name" value={form.assetName} onChange={v => setForm(p => ({ ...p, assetName: v }))} required />
+              
+              {/* AI Description button */}
+              <Button type="button" variant="outline" size="sm" className="w-full text-xs gap-1.5" onClick={handleAiDescribe} disabled={aiLoading || !form.assetName}>
+                {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                {aiLoading ? "Generating..." : "AI Generate Description"}
+              </Button>
+
+              <Field label="Description" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} />
               <div>
                 <Label className="text-xs">Asset Type</Label>
                 <Select value={form.assetType} onValueChange={v => setForm(p => ({ ...p, assetType: v as Asset['assetType'] }))}>
@@ -164,21 +215,30 @@ export default function AssetRegister() {
                   <SelectContent>{ASSET_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <Field label="Classification" value={form.dataClassification} onChange={v => setForm(p => ({ ...p, dataClassification: v }))} />
-              <Field label="Description" value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} />
+              <div>
+                <Label className="text-xs">Data Classification</Label>
+                <Select value={form.dataClassification || '_none'} onValueChange={v => setForm(p => ({ ...p, dataClassification: v === '_none' ? '' : v }))}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select classification" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select...</SelectItem>
+                    {DATA_CLASSIFICATIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Field label="Location" value={form.location} onChange={v => setForm(p => ({ ...p, location: v }))} required />
               <div>
                 <Label className="text-xs">Owner</Label>
                 <Select value={form.assetOwner || '_none'} onValueChange={v => setForm(p => ({ ...p, assetOwner: v === '_none' ? '' : v }))}>
                   <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select owner" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">Select...</SelectItem>
-                    {availableOwners.map(o => <SelectItem key={o.name} value={o.name}>{o.name}</SelectItem>)}
+                    {orgOwners.map(o => <SelectItem key={o.name} value={o.name}>{o.name} ({o.department})</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs">Department</Label>
-                <Select value={form.department || '_none'} onValueChange={v => setForm(p => ({ ...p, department: v === '_none' ? '' : v, assetOwner: '' }))}>
+                <Select value={form.department || '_none'} onValueChange={v => setForm(p => ({ ...p, department: v === '_none' ? '' : v }))}>
                   <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select department" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">Select...</SelectItem>
@@ -227,19 +287,20 @@ export default function AssetRegister() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b bg-muted/50">
-                {['ID', 'Name', 'Type', 'Owner', 'Dept', 'C', 'I', 'A', 'Score', 'Critical', 'Approved', ''].map(h => (
+                {['ID', 'Name', 'Type', 'Location', 'Owner', 'Dept', 'C', 'I', 'A', 'Score', 'Critical', 'Approved', ''].map(h => (
                   <th key={h} className="px-3 py-2 text-left font-medium text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={12} className="text-center py-8 text-muted-foreground">No assets found</td></tr>
+                <tr><td colSpan={13} className="text-center py-8 text-muted-foreground">No assets found</td></tr>
               ) : filtered.map(a => (
                 <tr key={a.id} className="border-b hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-2 font-mono">{a.assetId}</td>
                   <td className="px-3 py-2">{a.assetName}</td>
                   <td className="px-3 py-2">{a.assetType}</td>
+                  <td className="px-3 py-2">{a.location}</td>
                   <td className="px-3 py-2">{a.assetOwner}</td>
                   <td className="px-3 py-2">{a.department}</td>
                   <td className="px-3 py-2">{a.confidentiality}</td>
@@ -288,6 +349,7 @@ export default function AssetRegister() {
             <div className="space-y-3">
               <Field label="Asset ID" value={editAsset.assetId} onChange={v => setEditAsset(p => p ? { ...p, assetId: v } : null)} />
               <Field label="Asset Name" value={editAsset.assetName} onChange={v => setEditAsset(p => p ? { ...p, assetName: v } : null)} />
+              <Field label="Description" value={editAsset.description} onChange={v => setEditAsset(p => p ? { ...p, description: v } : null)} />
               <div>
                 <Label className="text-xs">Asset Type</Label>
                 <Select value={editAsset.assetType} onValueChange={v => setEditAsset(p => p ? { ...p, assetType: v as Asset['assetType'] } : null)}>
@@ -295,10 +357,32 @@ export default function AssetRegister() {
                   <SelectContent>{ASSET_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <Field label="Classification" value={editAsset.dataClassification} onChange={v => setEditAsset(p => p ? { ...p, dataClassification: v } : null)} />
-              <Field label="Description" value={editAsset.description} onChange={v => setEditAsset(p => p ? { ...p, description: v } : null)} />
-              <Field label="Owner" value={editAsset.assetOwner} onChange={v => setEditAsset(p => p ? { ...p, assetOwner: v } : null)} />
-              <Field label="Department" value={editAsset.department} onChange={v => setEditAsset(p => p ? { ...p, department: v } : null)} />
+              <div>
+                <Label className="text-xs">Data Classification</Label>
+                <Select value={editAsset.dataClassification || '_none'} onValueChange={v => setEditAsset(p => p ? { ...p, dataClassification: v === '_none' ? '' : v } : null)}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select...</SelectItem>
+                    {DATA_CLASSIFICATIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Field label="Location" value={editAsset.location} onChange={v => setEditAsset(p => p ? { ...p, location: v } : null)} />
+              <div>
+                <Label className="text-xs">Owner</Label>
+                <Select value={editAsset.assetOwner || '_none'} onValueChange={v => {
+                  const ownerName = v === '_none' ? '' : v;
+                  const owner = orgOwners.find(o => o.name === ownerName);
+                  setEditAsset(p => p ? { ...p, assetOwner: ownerName, department: owner?.department || p.department } : null);
+                }}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select...</SelectItem>
+                    {orgOwners.map(o => <SelectItem key={o.name} value={o.name}>{o.name} ({o.department})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Field label="Department" value={editAsset.department} onChange={v => setEditAsset(p => p ? { ...p, department: v } : null)} disabled />
               <div className="grid grid-cols-3 gap-2">
                 <NumberField label="C" value={editAsset.confidentiality} onChange={v => setEditAsset(p => p ? { ...p, confidentiality: v } : null)} disabled={!canEditCIA(editAsset)} />
                 <NumberField label="I" value={editAsset.integrity} onChange={v => setEditAsset(p => p ? { ...p, integrity: v } : null)} disabled={!canEditCIA(editAsset)} />
