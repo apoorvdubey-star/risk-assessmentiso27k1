@@ -40,11 +40,11 @@ export default function RiskAssessment() {
   const [controlSearch, setControlSearch] = useState('');
   const [controls, setControls] = useState<DbControl[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiControlLoading, setAiControlLoading] = useState(false);
   const [industry, setIndustry] = useState('');
   const [assetOwners, setAssetOwners] = useState<AssetOwnerInfo[]>([]);
 
   useEffect(() => {
-    // Load controls, org industry, and asset owners
     Promise.all([
       supabase.from('controls').select('control_id, control_name').order('control_id'),
       supabase.from('org_setup').select('industry').limit(1).single(),
@@ -66,7 +66,6 @@ export default function RiskAssessment() {
     if (!form.linkedAssetId) return;
     const asset = assets.find(a => a.id === form.linkedAssetId);
     if (!asset) return;
-    // Find owner for this asset's department
     const owner = assetOwners.find(o => o.department_name === asset.department);
     if (owner) {
       setForm(p => ({ ...p, riskOwner: owner.name }));
@@ -128,6 +127,36 @@ export default function RiskAssessment() {
     }
   };
 
+  const handleAiControlSuggest = async () => {
+    if (!form.threat || !form.vulnerability) {
+      toast.error("Enter threat and vulnerability first");
+      return;
+    }
+    setAiControlLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-control-suggest', {
+        body: {
+          threat: form.threat,
+          vulnerability: form.vulnerability,
+          industry,
+          availableControlIds: controls.map(c => c.controlId),
+        },
+      });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      const suggestedIds: string[] = (data.controlIds || []).filter((id: string) =>
+        controls.some(c => c.controlId === id)
+      );
+      setSelectedControls(suggestedIds);
+      toast.success(`AI suggested ${suggestedIds.length} controls`);
+    } catch (err: any) {
+      toast.error(err.message || "AI control suggestion failed");
+    } finally {
+      setAiControlLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.linkedAssetId) { toast.error("Select a critical asset"); return; }
@@ -179,12 +208,8 @@ export default function RiskAssessment() {
               
               {/* AI Auto-populate button */}
               <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full text-xs gap-1.5"
-                onClick={handleAiSuggest}
-                disabled={aiLoading || !form.linkedAssetId || !form.threat}
+                type="button" variant="outline" size="sm" className="w-full text-xs gap-1.5"
+                onClick={handleAiSuggest} disabled={aiLoading || !form.linkedAssetId || !form.threat}
               >
                 {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                 {aiLoading ? "Generating suggestions..." : "AI Auto-populate"}
@@ -209,7 +234,17 @@ export default function RiskAssessment() {
                 {previewScore > settings.riskThreshold && <span className="text-risk-critical ml-1">⚠ Treatment Required</span>}
               </div>
               <div>
-                <Label className="text-xs">Existing Controls (Annex A)</Label>
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs">Existing Controls (Annex A)</Label>
+                  <Button
+                    type="button" variant="outline" size="sm" className="h-6 text-xs gap-1"
+                    onClick={handleAiControlSuggest}
+                    disabled={aiControlLoading || !form.threat || !form.vulnerability}
+                  >
+                    {aiControlLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    AI Suggest
+                  </Button>
+                </div>
                 <Input placeholder="Search controls..." value={controlSearch} onChange={e => setControlSearch(e.target.value)} className="h-8 text-sm mb-1" />
                 <div className="max-h-32 overflow-y-auto border rounded p-1 space-y-0.5">
                   {filteredControls.map(c => (

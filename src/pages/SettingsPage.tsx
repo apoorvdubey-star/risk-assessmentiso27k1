@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
-import { useAuth, AppRole } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+
+const DATA_CLASSIFICATIONS = ['Internal', 'Confidential', 'Restricted', 'Public'] as const;
 
 interface UserRow {
   id: string;
@@ -18,19 +20,25 @@ interface UserRow {
   role: string;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  risk_owner: 'Risk Owner',
-  user: 'User',
-};
-
 export default function SettingsPage() {
   const { settings, updateSettings } = useApp();
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [defaultClassification, setDefaultClassification] = useState('');
+  const [orgSetupId, setOrgSetupId] = useState('');
+  const [savingClassification, setSavingClassification] = useState(false);
+  const [aiClassLoading, setAiClassLoading] = useState(false);
+  const [industry, setIndustry] = useState('');
 
   useEffect(() => {
+    supabase.from('org_setup').select('id, industry, default_data_classification').limit(1).single().then(({ data }) => {
+      if (data) {
+        setOrgSetupId(data.id);
+        setIndustry((data as any).industry || '');
+        setDefaultClassification((data as any).default_data_classification || '');
+      }
+    });
     if (isAdmin) {
       setLoadingUsers(true);
       supabase.rpc('get_all_users').then(({ data, error }) => {
@@ -39,6 +47,40 @@ export default function SettingsPage() {
       });
     }
   }, [isAdmin]);
+
+  const saveClassification = async (value: string) => {
+    setDefaultClassification(value);
+    setSavingClassification(true);
+    try {
+      const { error } = await supabase.from('org_setup').update({
+        default_data_classification: value,
+      } as any).eq('id', orgSetupId);
+      if (error) throw error;
+      toast.success("Default data classification saved");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save");
+    } finally {
+      setSavingClassification(false);
+    }
+  };
+
+  const handleAiClassification = async () => {
+    setAiClassLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-asset-describe', {
+        body: { assetName: 'Organization default classification', assetType: 'Data', industry },
+      });
+      if (error) throw error;
+      if (data?.suggestedClassification) {
+        await saveClassification(data.suggestedClassification);
+        toast.success(`AI suggests: ${data.suggestedClassification}`);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "AI suggestion failed");
+    } finally {
+      setAiClassLoading(false);
+    }
+  };
 
   const changeRole = async (userId: string, newRole: string) => {
     try {
@@ -58,6 +100,30 @@ export default function SettingsPage() {
     <div className="p-6 split-panel h-full max-w-3xl">
       <h1 className="text-2xl font-bold mb-4">Settings</h1>
       <div className="space-y-4">
+        {/* Data Classification */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Default Data Classification</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">Set the default data classification for new assets. This can be overridden per asset.</p>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Label className="text-xs">Classification</Label>
+                <Select value={defaultClassification || '_none'} onValueChange={v => saveClassification(v === '_none' ? '' : v)} disabled={savingClassification}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select...</SelectItem>
+                    {DATA_CLASSIFICATIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="button" variant="outline" size="sm" className="text-xs gap-1.5 h-8" onClick={handleAiClassification} disabled={aiClassLoading}>
+                {aiClassLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                AI Suggest
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {isAdmin && (
           <Card>
             <CardHeader><CardTitle className="text-sm">Risk Matrix Configuration</CardTitle></CardHeader>
