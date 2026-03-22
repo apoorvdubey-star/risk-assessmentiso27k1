@@ -194,7 +194,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       impact: risk.impact,
       risk_score: riskScore,
       risk_level: riskLevel,
-      management_decision: risk.managementDecision,
+      management_decision: risk.managementDecision || null,
       resultant_risk: risk.resultantRisk,
       status: risk.status,
       expected_closure_date: risk.expectedClosureDate,
