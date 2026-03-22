@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Asset, Risk, AppSettings, getRiskLevel } from '../data/types';
 
