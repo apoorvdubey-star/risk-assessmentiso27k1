@@ -166,7 +166,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       risk_owner: risk.riskOwner,
       likelihood: risk.likelihood,
       impact: risk.impact,
-      risk_score: riskScore,
       risk_level: riskLevel,
       management_decision: risk.managementDecision || null,
       resultant_risk: risk.resultantRisk,
