@@ -77,6 +77,8 @@ function AppRoutes() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/matrix" element={<RiskMatrix />} />
+          <Route path="/faq" element={<FAQPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Layout>
