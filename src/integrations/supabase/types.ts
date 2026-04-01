@@ -21,6 +21,7 @@ export type Database = {
           risk_matrix_type: string
           risk_reduction_percent: number
           risk_threshold: number
+          tenant_id: string | null
           updated_at: string
         }
         Insert: {
@@ -29,6 +30,7 @@ export type Database = {
           risk_matrix_type?: string
           risk_reduction_percent?: number
           risk_threshold?: number
+          tenant_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -37,9 +39,18 @@ export type Database = {
           risk_matrix_type?: string
           risk_reduction_percent?: number
           risk_threshold?: number
+          tenant_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "app_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       asset_owners: {
         Row: {
@@ -48,6 +59,7 @@ export type Database = {
           email: string
           id: string
           name: string
+          tenant_id: string | null
         }
         Insert: {
           created_at?: string
@@ -55,6 +67,7 @@ export type Database = {
           email: string
           id?: string
           name: string
+          tenant_id?: string | null
         }
         Update: {
           created_at?: string
@@ -62,6 +75,7 @@ export type Database = {
           email?: string
           id?: string
           name?: string
+          tenant_id?: string | null
         }
         Relationships: [
           {
@@ -69,6 +83,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_owners_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -92,6 +113,7 @@ export type Database = {
           integrity: number
           is_critical: boolean | null
           location: string | null
+          tenant_id: string | null
           updated_at: string
         }
         Insert: {
@@ -112,6 +134,7 @@ export type Database = {
           integrity?: number
           is_critical?: boolean | null
           location?: string | null
+          tenant_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -132,9 +155,18 @@ export type Database = {
           integrity?: number
           is_critical?: boolean | null
           location?: string | null
+          tenant_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "assets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       controls: {
         Row: {
@@ -143,6 +175,7 @@ export type Database = {
           control_id: string
           control_name: string
           id: string
+          tenant_id: string | null
         }
         Insert: {
           control_category: Database["public"]["Enums"]["control_category"]
@@ -150,6 +183,7 @@ export type Database = {
           control_id: string
           control_name: string
           id?: string
+          tenant_id?: string | null
         }
         Update: {
           control_category?: Database["public"]["Enums"]["control_category"]
@@ -157,44 +191,75 @@ export type Database = {
           control_id?: string
           control_name?: string
           id?: string
+          tenant_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "controls_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       departments: {
         Row: {
           created_at: string
           id: string
           name: string
+          tenant_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          tenant_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          tenant_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "departments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       locations: {
         Row: {
           created_at: string
           id: string
           name: string
+          tenant_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          tenant_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          tenant_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "locations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       org_setup: {
         Row: {
@@ -204,6 +269,7 @@ export type Database = {
           industry: string
           org_name: string
           setup_completed: boolean
+          tenant_id: string | null
           updated_at: string
         }
         Insert: {
@@ -213,6 +279,7 @@ export type Database = {
           industry?: string
           org_name?: string
           setup_completed?: boolean
+          tenant_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -222,9 +289,18 @@ export type Database = {
           industry?: string
           org_name?: string
           setup_completed?: boolean
+          tenant_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "org_setup_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -232,20 +308,31 @@ export type Database = {
           department: string
           full_name: string
           id: string
+          tenant_id: string | null
         }
         Insert: {
           created_at?: string
           department?: string
           full_name?: string
           id: string
+          tenant_id?: string | null
         }
         Update: {
           created_at?: string
           department?: string
           full_name?: string
           id?: string
+          tenant_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       risks: {
         Row: {
@@ -271,6 +358,7 @@ export type Database = {
           risk_scenario: string | null
           risk_score: number | null
           status: Database["public"]["Enums"]["risk_status"]
+          tenant_id: string | null
           threat: string
           updated_at: string
           vulnerability: string
@@ -298,6 +386,7 @@ export type Database = {
           risk_scenario?: string | null
           risk_score?: number | null
           status?: Database["public"]["Enums"]["risk_status"]
+          tenant_id?: string | null
           threat: string
           updated_at?: string
           vulnerability: string
@@ -325,6 +414,7 @@ export type Database = {
           risk_scenario?: string | null
           risk_score?: number | null
           status?: Database["public"]["Enums"]["risk_status"]
+          tenant_id?: string | null
           threat?: string
           updated_at?: string
           vulnerability?: string
@@ -337,31 +427,115 @@ export type Database = {
             referencedRelation: "assets"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "risks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      tenant_memberships: {
+        Row: {
+          created_at: string | null
+          id: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_memberships_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenants: {
+        Row: {
+          created_at: string | null
+          default_data_classification: string | null
+          domain: string | null
+          id: string
+          industry: string | null
+          name: string
+          setup_completed: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_data_classification?: string | null
+          domain?: string | null
+          id?: string
+          industry?: string | null
+          name?: string
+          setup_completed?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_data_classification?: string | null
+          domain?: string | null
+          id?: string
+          industry?: string | null
+          name?: string
+          setup_completed?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
           id: string
           role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string | null
           user_id: string
         }
         Insert: {
           id?: string
           role: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
           user_id: string
         }
         Update: {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      create_tenant_and_assign: {
+        Args: { _domain?: string; _industry?: string; _name: string }
+        Returns: string
+      }
       get_all_users: {
         Args: never
         Returns: {
@@ -373,6 +547,7 @@ export type Database = {
         }[]
       }
       get_user_role: { Args: never; Returns: string }
+      get_user_tenant_id: { Args: never; Returns: string }
       handle_signup: {
         Args: { _department?: string; _full_name?: string }
         Returns: undefined
@@ -384,6 +559,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      join_tenant_by_domain: { Args: { _email: string }; Returns: string }
       set_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
