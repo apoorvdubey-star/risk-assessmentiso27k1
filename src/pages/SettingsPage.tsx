@@ -99,7 +99,8 @@ export default function SettingsPage() {
     }
     setAddingLocation(true);
     try {
-      const { data, error } = await supabase.from('locations').insert({ name: trimmed }).select('id, name').single();
+      const { data: tmData } = await supabase.from('tenant_memberships').select('tenant_id').limit(1).maybeSingle();
+      const { data, error } = await supabase.from('locations').insert({ name: trimmed, tenant_id: tmData?.tenant_id }).select('id, name').single();
       if (error) throw error;
       if (data) setLocations(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setNewLocation('');
