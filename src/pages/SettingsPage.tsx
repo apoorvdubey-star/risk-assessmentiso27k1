@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -98,7 +99,8 @@ export default function SettingsPage() {
     }
     setAddingLocation(true);
     try {
-      const { data, error } = await supabase.from('locations').insert({ name: trimmed }).select('id, name').single();
+      const { data: tmData } = await supabase.from('tenant_memberships').select('tenant_id').limit(1).maybeSingle();
+      const { data, error } = await supabase.from('locations').insert({ name: trimmed, tenant_id: tmData?.tenant_id }).select('id, name').single();
       if (error) throw error;
       if (data) setLocations(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
       setNewLocation('');

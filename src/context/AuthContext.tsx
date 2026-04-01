@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable/index';
 import { Session, User } from '@supabase/supabase-js';
 
 export type AppRole = 'admin' | 'risk_owner' | 'user';
@@ -9,13 +10,17 @@ interface AuthContextType {
   user: User | null;
   role: AppRole;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, department: string) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  tenantId: string | null;
+  hasTenant: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
   isRiskOwner: boolean;
   canEdit: boolean;
   refreshRole: () => Promise<void>;
+  resolveTenant: () => Promise<string | null>;
+  createTenant: (name: string, domain: string, industry: string) => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<AppRole>('user');
   const [loading, setLoading] = useState(true);
+  const [tenantId, setTenantId] = useState<string | null>(null);
 
   const loadUserRole = useCallback(async () => {
     try {
@@ -40,8 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: profile } = await supabase.from('profiles').select('id').eq('id', u.id).maybeSingle();
       if (!profile) {
         await supabase.rpc('handle_signup', {
-          _full_name: u.user_metadata.full_name || '',
-          _department: u.user_metadata.department || '',
+          _full_name: u.user_metadata.full_name || u.user_metadata.name || '',
+          _department: '',
         });
       }
     } catch (err) {
@@ -49,18 +55,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const resolveTenant = useCallback(async (): Promise<string | null> => {
+    // Check existing membership
+    const { data: membership } = await supabase
+      .from('tenant_memberships')
+      .select('tenant_id')
+      .limit(1)
+      .maybeSingle();
+
+    if (membership?.tenant_id) {
+      setTenantId(membership.tenant_id);
+      return membership.tenant_id;
+    }
+
+    // Try auto-join by domain
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser?.email) {
+      const { data: joinedTenantId } = await supabase.rpc('join_tenant_by_domain', {
+        _email: currentUser.email,
+      });
+      if (joinedTenantId) {
+        setTenantId(joinedTenantId);
+        return joinedTenantId;
+      }
+    }
+
+    return null;
+  }, []);
+
+  const createTenant = useCallback(async (name: string, domain: string, industry: string): Promise<string> => {
+    const { data, error } = await supabase.rpc('create_tenant_and_assign', {
+      _name: name,
+      _domain: domain || null,
+      _industry: industry,
+    });
+    if (error) throw error;
+    const tid = data as string;
+    setTenantId(tid);
+    await loadUserRole();
+    return tid;
+  }, [loadUserRole]);
+
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         setTimeout(async () => {
           await ensureProfile(session.user);
-          await loadUserRole();
+          const tid = await resolveTenant();
+          if (tid) {
+            await loadUserRole();
+          }
           setLoading(false);
         }, 0);
       } else {
         setRole('user');
+        setTenantId(null);
         setLoading(false);
       }
     });
@@ -72,23 +123,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [ensureProfile, loadUserRole]);
+  }, [ensureProfile, loadUserRole, resolveTenant]);
 
-  const signUp = async (email: string, password: string, fullName: string, department: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, department },
-        emailRedirectTo: window.location.origin,
-      },
+  const signInWithGoogle = async () => {
+    const result = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: window.location.origin,
     });
-    return { error };
+    if (result.error) throw result.error;
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+  const signInWithApple = async () => {
+    const result = await lovable.auth.signInWithOAuth('apple', {
+      redirect_uri: window.location.origin,
+    });
+    if (result.error) throw result.error;
   };
 
   const signOut = async () => {
@@ -96,14 +144,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setUser(null);
     setRole('user');
+    setTenantId(null);
   };
 
   const isAdmin = role === 'admin';
   const isRiskOwner = role === 'risk_owner';
   const canEdit = isAdmin || isRiskOwner;
+  const hasTenant = !!tenantId;
 
   return (
-    <AuthContext.Provider value={{ session, user, role, loading, signUp, signIn, signOut, isAdmin, isRiskOwner, canEdit, refreshRole: loadUserRole }}>
+    <AuthContext.Provider value={{
+      session, user, role, loading, tenantId, hasTenant,
+      signInWithGoogle, signInWithApple, signOut,
+      isAdmin, isRiskOwner, canEdit, refreshRole: loadUserRole,
+      resolveTenant, createTenant,
+    }}>
       {children}
     </AuthContext.Provider>
   );

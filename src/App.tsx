@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AppProvider } from "@/context/AppContext";
 import { Layout } from "@/components/Layout";
 import Auth from "./pages/Auth";
+import TenantSetup from "./pages/TenantSetup";
 import OrgSetup from "./pages/OrgSetup";
 import Dashboard from "./pages/Dashboard";
 import AssetRegister from "./pages/AssetRegister";
@@ -25,15 +26,26 @@ import { supabase } from "@/integrations/supabase/client";
 const queryClient = new QueryClient();
 
 function AppRoutes() {
-  const { session, loading, isAdmin } = useAuth();
+  const { session, loading, isAdmin, hasTenant, resolveTenant } = useAuth();
   const [orgSetupDone, setOrgSetupDone] = useState<boolean | null>(null);
+  const [tenantReady, setTenantReady] = useState(false);
+
+  // Re-check tenant after TenantSetup completes
+  const handleTenantCreated = async () => {
+    await resolveTenant();
+    setTenantReady(true);
+  };
 
   useEffect(() => {
-    if (!session) return;
+    if (hasTenant) setTenantReady(true);
+  }, [hasTenant]);
+
+  useEffect(() => {
+    if (!session || !tenantReady) return;
     supabase.from("org_setup").select("setup_completed").limit(1).single().then(({ data }) => {
       setOrgSetupDone(data?.setup_completed ?? false);
     });
-  }, [session]);
+  }, [session, tenantReady]);
 
   if (loading) {
     return (
@@ -45,7 +57,11 @@ function AppRoutes() {
 
   if (!session) return <Auth />;
 
-  // Show org setup for admin if not completed
+  // User is logged in but has no tenant — show create/join flow
+  if (!tenantReady) {
+    return <TenantSetup onComplete={handleTenantCreated} />;
+  }
+
   if (orgSetupDone === null) {
     return <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">Loading...</div>;
   }

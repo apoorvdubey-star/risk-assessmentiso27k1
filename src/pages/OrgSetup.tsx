@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ interface DepartmentForm {
 }
 
 export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
+  const { tenantId } = useAuth();
   const [step, setStep] = useState(1);
   const [orgName, setOrgName] = useState("");
   const [industry, setIndustry] = useState("");
@@ -60,17 +62,21 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
 
     setSaving(true);
     try {
-      // Save org setup
-      const { error: orgError } = await supabase.from("org_setup").insert({
-        org_name: orgName.trim(),
-        industry: industry.trim(),
-        setup_completed: true,
-      });
+      // Update org setup (already created by tenant setup)
+      const { error: orgError } = await supabase.from("org_setup")
+        .update({
+          org_name: orgName.trim(),
+          industry: industry.trim(),
+          setup_completed: true,
+        })
+        .eq('tenant_id', tenantId);
       if (orgError) throw orgError;
 
       // Save departments
       for (const dept of validDepts) {
-        const { data: deptData, error: deptError } = await supabase.from("departments").insert({ name: dept.name.trim() }).select("id").single();
+        const { data: deptData, error: deptError } = await supabase.from("departments")
+          .insert({ name: dept.name.trim(), tenant_id: tenantId })
+          .select("id").single();
         if (deptError) throw deptError;
 
         // Save asset owners
@@ -80,6 +86,7 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
             name: owner.name.trim(),
             email: owner.email.trim(),
             department_id: deptData.id,
+            tenant_id: tenantId,
           });
           if (ownerError) throw ownerError;
         }
