@@ -15,6 +15,7 @@ interface DepartmentForm {
 }
 
 export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
+  const { tenantId } = useAuth();
   const [step, setStep] = useState(1);
   const [orgName, setOrgName] = useState("");
   const [industry, setIndustry] = useState("");
