@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import { Asset, Risk, AppSettings, getRiskLevel } from '../data/types';
 
 interface AppContextType {
@@ -72,6 +73,7 @@ function mapDbRisk(row: any): Risk {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const { tenantId } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [risks, setRisks] = useState<Risk[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
@@ -81,6 +83,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
+      // RLS handles tenant filtering automatically
       const [assetRes, riskRes, settingsRes] = await Promise.all([
         supabase.from('assets').select('*').order('created_at', { ascending: false }),
         supabase.from('risks').select('*').order('created_at', { ascending: false }),
@@ -118,10 +121,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confidentiality: asset.confidentiality,
       integrity: asset.integrity,
       availability: asset.availability,
+      tenant_id: tenantId,
     });
     if (error) throw error;
     await fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll, tenantId]);
 
   const updateAsset = useCallback(async (asset: Asset) => {
     const { error } = await supabase.from('assets').update({
@@ -178,10 +182,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       status: risk.status,
       expected_closure_date: risk.expectedClosureDate || null,
       remarks: risk.remarks,
+      tenant_id: tenantId,
     });
     if (error) throw error;
     await fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll, tenantId]);
 
   const updateRisk = useCallback(async (risk: Risk) => {
     const riskScore = risk.likelihood * risk.impact;
@@ -243,45 +248,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confidentiality: asset.confidentiality,
       integrity: asset.integrity,
       availability: asset.availability,
+      tenant_id: tenantId,
     })));
     if (error) throw error;
     await fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll, tenantId]);
 
   const refreshData = useCallback(async () => {
     await fetchAll();
   }, [fetchAll]);
 
   const contextValue = useMemo(() => ({
-    assets,
-    risks,
-    settings,
-    loading,
-    addAsset,
-    updateAsset,
-    deleteAsset,
-    approveAssetCriticality,
-    addRisk,
-    updateRisk,
-    deleteRisk,
-    updateSettings,
-    importAssets,
-    refreshData,
+    assets, risks, settings, loading,
+    addAsset, updateAsset, deleteAsset, approveAssetCriticality,
+    addRisk, updateRisk, deleteRisk, updateSettings, importAssets, refreshData,
   }), [
-    assets,
-    risks,
-    settings,
-    loading,
-    addAsset,
-    updateAsset,
-    deleteAsset,
-    approveAssetCriticality,
-    addRisk,
-    updateRisk,
-    deleteRisk,
-    updateSettings,
-    importAssets,
-    refreshData,
+    assets, risks, settings, loading,
+    addAsset, updateAsset, deleteAsset, approveAssetCriticality,
+    addRisk, updateRisk, deleteRisk, updateSettings, importAssets, refreshData,
   ]);
 
   return (
