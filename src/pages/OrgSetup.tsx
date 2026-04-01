@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Users, Plus, X, ArrowRight, ArrowLeft, CheckCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Building2, Plus, X, ArrowRight, ArrowLeft, CheckCircle, AlertTriangle, Info } from "lucide-react";
 import { toast } from "sonner";
 
 interface DepartmentForm {
@@ -19,16 +21,13 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(1);
   const [orgName, setOrgName] = useState("");
   const [industry, setIndustry] = useState("");
+  const [ownerMode, setOwnerMode] = useState<"unique" | "shared">("unique");
   const [departments, setDepartments] = useState<DepartmentForm[]>([{ name: "", owners: [{ name: "", email: "" }] }]);
   const [saving, setSaving] = useState(false);
 
   const addDepartment = () => setDepartments(prev => [...prev, { name: "", owners: [{ name: "", email: "" }] }]);
-
   const removeDepartment = (idx: number) => setDepartments(prev => prev.filter((_, i) => i !== idx));
-
-  const updateDept = (idx: number, name: string) => {
-    setDepartments(prev => prev.map((d, i) => i === idx ? { ...d, name } : d));
-  };
+  const updateDept = (idx: number, name: string) => setDepartments(prev => prev.map((d, i) => i === idx ? { ...d, name } : d));
 
   const addOwner = (deptIdx: number) => {
     setDepartments(prev => prev.map((d, i) => {
@@ -51,6 +50,21 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
     }));
   };
 
+  // Find duplicate owners across departments
+  const getDuplicateOwners = () => {
+    const validDepts = departments.filter(d => d.name.trim());
+    const seen = new Map<string, string[]>(); // email -> [dept names]
+    for (const dept of validDepts) {
+      for (const owner of dept.owners) {
+        const email = owner.email.trim().toLowerCase();
+        if (!email) continue;
+        if (!seen.has(email)) seen.set(email, []);
+        seen.get(email)!.push(dept.name.trim());
+      }
+    }
+    return Array.from(seen.entries()).filter(([, depts]) => depts.length > 1);
+  };
+
   const handleSave = async () => {
     if (!orgName.trim()) { toast.error("Organization name is required"); return; }
     const validDepts = departments.filter(d => d.name.trim());
@@ -60,33 +74,30 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
       if (validOwners.length === 0) { toast.error(`Add at least one owner for ${d.name}`); return; }
     }
 
+    const duplicates = getDuplicateOwners();
+    if (ownerMode === "unique" && duplicates.length > 0) {
+      toast.error(`Duplicate owners found: ${duplicates.map(([email]) => email).join(", ")}. In unique mode, each owner must belong to one department.`);
+      return;
+    }
+
     setSaving(true);
     try {
-      // Update org setup (already created by tenant setup)
       const { error: orgError } = await supabase.from("org_setup")
-        .update({
-          org_name: orgName.trim(),
-          industry: industry.trim(),
-          setup_completed: true,
-        })
+        .update({ org_name: orgName.trim(), industry: industry.trim(), setup_completed: true })
         .eq('tenant_id', tenantId);
       if (orgError) throw orgError;
 
-      // Save departments
       for (const dept of validDepts) {
         const { data: deptData, error: deptError } = await supabase.from("departments")
           .insert({ name: dept.name.trim(), tenant_id: tenantId })
           .select("id").single();
         if (deptError) throw deptError;
 
-        // Save asset owners
         const validOwners = dept.owners.filter(o => o.name.trim() && o.email.trim());
         for (const owner of validOwners) {
           const { error: ownerError } = await supabase.from("asset_owners").insert({
-            name: owner.name.trim(),
-            email: owner.email.trim(),
-            department_id: deptData.id,
-            tenant_id: tenantId,
+            name: owner.name.trim(), email: owner.email.trim(),
+            department_id: deptData.id, tenant_id: tenantId,
           });
           if (ownerError) throw ownerError;
         }
@@ -100,6 +111,8 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
       setSaving(false);
     }
   };
+
+  const duplicates = getDuplicateOwners();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -127,6 +140,25 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
               <div>
                 <Label>Industry</Label>
                 <Input value={industry} onChange={e => setIndustry(e.target.value)} placeholder="e.g. Financial Services, Healthcare, IT" />
+              </div>
+              <div className="space-y-2">
+                <Label>Are Asset Owners / Risk Owners unique per department or shared across departments?</Label>
+                <RadioGroup value={ownerMode} onValueChange={(v) => setOwnerMode(v as "unique" | "shared")} className="space-y-2">
+                  <div className="flex items-start space-x-2 border rounded-md p-3">
+                    <RadioGroupItem value="unique" id="unique" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="unique" className="font-medium cursor-pointer">Unique per department</Label>
+                      <p className="text-xs text-muted-foreground">Each owner is assigned to only one department. Duplicates will be blocked.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start space-x-2 border rounded-md p-3">
+                    <RadioGroupItem value="shared" id="shared" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="shared" className="font-medium cursor-pointer">Shared across departments</Label>
+                      <p className="text-xs text-muted-foreground">Same person can be an owner for multiple departments (common in smaller companies). A warning will be shown.</p>
+                    </div>
+                  </div>
+                </RadioGroup>
               </div>
               <Button className="w-full" onClick={() => { if (!orgName.trim()) { toast.error("Organization name required"); return; } setStep(2); }}>
                 Next <ArrowRight className="h-4 w-4 ml-1" />
@@ -173,7 +205,32 @@ export default function OrgSetup({ onComplete }: { onComplete: () => void }) {
           {step === 3 && (
             <div className="space-y-4">
               <h3 className="font-medium">Asset Owners / Risk Owners</h3>
-              <p className="text-sm text-muted-foreground">Each department can have up to 2 asset owners (who are also risk owners).</p>
+              <p className="text-sm text-muted-foreground">
+                Each department can have up to 2 asset owners (who are also risk owners).
+                {ownerMode === "shared" && " Same person can own multiple departments."}
+              </p>
+
+              {ownerMode === "shared" && duplicates.length > 0 && (
+                <Alert className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-xs text-yellow-700 dark:text-yellow-400">
+                    <strong>Shared owners detected:</strong> {duplicates.map(([email, depts]) => (
+                      <span key={email}> {email} → {depts.join(", ")}; </span>
+                    ))}
+                    This is allowed for smaller organizations.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {ownerMode === "unique" && duplicates.length > 0 && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Duplicate owners not allowed in unique mode:</strong> {duplicates.map(([email]) => email).join(", ")}. Each owner must belong to only one department.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {departments.filter(d => d.name.trim()).map((dept, dIdx) => (
                 <div key={dIdx} className="border rounded-lg p-3 space-y-3">
                   <div className="flex items-center gap-2">
