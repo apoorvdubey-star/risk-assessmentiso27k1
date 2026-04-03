@@ -139,7 +139,7 @@ export default function ConfigurationPage() {
 
   return (
     <div className="p-6 split-panel h-full max-w-3xl">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
+      <h1 className="text-2xl font-bold mb-4">Configuration</h1>
       <div className="space-y-4">
         {/* Data Classification - Multi-select */}
         <Card>
