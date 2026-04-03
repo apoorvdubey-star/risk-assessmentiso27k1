@@ -28,7 +28,7 @@ interface LocationRow {
   name: string;
 }
 
-export default function SettingsPage() {
+export default function ConfigurationPage() {
   const { settings, updateSettings } = useApp();
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
