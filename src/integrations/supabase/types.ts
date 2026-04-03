@@ -472,6 +472,7 @@ export type Database = {
           domain: string | null
           id: string
           industry: string | null
+          logo_url: string | null
           name: string
           setup_completed: boolean | null
           updated_at: string | null
@@ -482,6 +483,7 @@ export type Database = {
           domain?: string | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name?: string
           setup_completed?: boolean | null
           updated_at?: string | null
@@ -492,6 +494,7 @@ export type Database = {
           domain?: string | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
           name?: string
           setup_completed?: boolean | null
           updated_at?: string | null
