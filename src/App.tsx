@@ -92,7 +92,8 @@ function AppRoutes() {
           <Route path="/treatment" element={<RiskTreatment />} />
           <Route path="/controls" element={<ControlsLibrary />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/configuration" element={<ConfigurationPage />} />
+          <Route path="/settings" element={<AppSettingsPage />} />
           <Route path="/matrix" element={<RiskMatrix />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/about" element={<AboutPage />} />
