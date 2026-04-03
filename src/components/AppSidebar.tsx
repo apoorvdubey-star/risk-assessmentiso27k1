@@ -1,11 +1,13 @@
 import {
-  LayoutDashboard, Server, AlertTriangle, ShieldCheck, BookOpen, FileText, Settings, Grid3X3, HelpCircle, Info
+  LayoutDashboard, Server, AlertTriangle, ShieldCheck, BookOpen, FileText, Settings, Grid3X3, HelpCircle, Info, Wrench
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar,
 } from "@/components/ui/sidebar";
 
 const mainItems = [
@@ -19,8 +21,9 @@ const mainItems = [
 ];
 
 const bottomItems = [
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Configuration", url: "/configuration", icon: Wrench },
   { title: "FAQ", url: "/faq", icon: HelpCircle },
+  { title: "Settings", url: "/settings", icon: Settings },
   { title: "About", url: "/about", icon: Info },
 ];
 
@@ -29,6 +32,19 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const isActive = (path: string) => location.pathname === path;
+
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string>("");
+
+  useEffect(() => {
+    supabase.from("tenants").select("name, logo_url").limit(1).single().then(({ data }) => {
+      if (data) {
+        setOrgName((data as any).name || "");
+        const url = (data as any).logo_url;
+        if (url) setLogoUrl(url);
+      }
+    });
+  }, []);
 
   return (
     <Sidebar collapsible="icon">
@@ -68,6 +84,21 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="p-3 border-t border-sidebar-border">
+        <div className="flex items-center gap-2 min-h-[40px]">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={orgName || "Company Logo"}
+              className="h-8 max-w-[140px] object-contain rounded"
+            />
+          ) : (
+            !collapsed && orgName && (
+              <span className="text-xs font-medium text-sidebar-foreground truncate">{orgName}</span>
+            )
+          )}
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

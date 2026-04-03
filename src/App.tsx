@@ -15,7 +15,8 @@ import RiskAssessment from "./pages/RiskAssessment";
 import RiskTreatment from "./pages/RiskTreatment";
 import ControlsLibrary from "./pages/ControlsLibrary";
 import Reports from "./pages/Reports";
-import SettingsPage from "./pages/SettingsPage";
+import ConfigurationPage from "./pages/SettingsPage";
+import AppSettingsPage from "./pages/AppSettingsPage";
 import RiskMatrix from "./pages/RiskMatrix";
 import FAQPage from "./pages/FAQPage";
 import AboutPage from "./pages/AboutPage";
@@ -91,7 +92,8 @@ function AppRoutes() {
           <Route path="/treatment" element={<RiskTreatment />} />
           <Route path="/controls" element={<ControlsLibrary />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/configuration" element={<ConfigurationPage />} />
+          <Route path="/settings" element={<AppSettingsPage />} />
           <Route path="/matrix" element={<RiskMatrix />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/about" element={<AboutPage />} />

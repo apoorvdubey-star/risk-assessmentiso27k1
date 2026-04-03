@@ -28,7 +28,7 @@ interface LocationRow {
   name: string;
 }
 
-export default function SettingsPage() {
+export default function ConfigurationPage() {
   const { settings, updateSettings } = useApp();
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -139,7 +139,7 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 split-panel h-full max-w-3xl">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
+      <h1 className="text-2xl font-bold mb-4">Configuration</h1>
       <div className="space-y-4">
         {/* Data Classification - Multi-select */}
         <Card>
