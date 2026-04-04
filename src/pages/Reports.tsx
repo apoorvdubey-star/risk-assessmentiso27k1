@@ -24,17 +24,6 @@ export default function Reports() {
     download(data, "Risk Register", "risk_register.xlsx");
   };
 
-  const exportSoA = async () => {
-    const { data: controls } = await supabase.from('controls').select('*').order('control_id');
-    if (!controls) return;
-    const usedControls = new Set(risks.flatMap(r => r.existingControlIds));
-    const data = controls.map(c => ({
-      ControlID: c.control_id, ControlName: c.control_name, Category: c.control_category,
-      Applicable: usedControls.has(c.control_id) ? 'Yes' : 'No',
-      Justification: usedControls.has(c.control_id) ? 'Applied to identified risks' : 'Not applicable to current risk assessment',
-    }));
-    download(data, "SoA", "statement_of_applicability.xlsx");
-  };
 
   const exportAssetInventory = () => {
     download(assets.map(({ id, ...rest }) => rest), "Assets", "asset_inventory.xlsx");
