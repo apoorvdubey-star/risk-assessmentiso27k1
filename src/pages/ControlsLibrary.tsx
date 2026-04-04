@@ -127,7 +127,7 @@ export default function ControlsLibrary() {
               <th className="px-3 py-2 text-left font-medium text-muted-foreground w-48">Name</th>
               <th className="px-3 py-2 text-left font-medium text-muted-foreground">Description</th>
               <th className="px-3 py-2 text-left font-medium text-muted-foreground w-32">Category</th>
-              {isAdmin && <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">Actions</th>}
+              <th className="px-3 py-2 text-left font-medium text-muted-foreground w-20">Actions</th>
             </tr>
           </thead>
           <tbody>
