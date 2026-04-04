@@ -563,6 +563,10 @@ export type Database = {
         Returns: boolean
       }
       join_tenant_by_domain: { Args: { _email: string }; Returns: string }
+      seed_controls_for_tenant: {
+        Args: { _tenant_id: string }
+        Returns: undefined
+      }
       set_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
