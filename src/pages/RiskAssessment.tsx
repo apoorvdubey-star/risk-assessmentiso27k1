@@ -43,7 +43,7 @@ const emptyRisk = () => ({
 
 export default function RiskAssessment() {
   const { assets, risks, addRisk, deleteRisk, settings } = useApp();
-  const criticalAssets = useMemo(() => assets.filter(a => a.isCritical), [assets]);
+  const criticalAssets = useMemo(() => assets.filter(a => a.isCritical && a.criticalityApproved), [assets]);
   const [form, setForm] = useState(emptyRisk());
   const [search, setSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('all');

@@ -137,16 +137,16 @@ export default function ControlsLibrary() {
                 <td className="px-3 py-2 font-medium">{c.controlName}</td>
                 <td className="px-3 py-2 text-muted-foreground">{c.controlDescription}</td>
                 <td className="px-3 py-2"><Badge className={`text-xs border ${CAT_COLORS[c.controlCategory]}`}>{c.controlCategory}</Badge></td>
-                {isAdmin && (
-                  <td className="px-3 py-2 flex gap-1">
+                <td className="px-3 py-2 flex gap-1">
+                  {isAdmin && (
                     <Button variant="ghost" size="sm" onClick={() => setEditControl({ ...c })}>
                       <Pencil className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
-                  </td>
-                )}
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)}>
+                    <Trash2 className="h-3 w-3 text-destructive" />
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>
