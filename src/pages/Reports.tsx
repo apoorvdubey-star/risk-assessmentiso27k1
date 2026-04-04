@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { FileDown } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+
 
 export default function Reports() {
   const { assets, risks, settings } = useApp();
@@ -24,17 +24,6 @@ export default function Reports() {
     download(data, "Risk Register", "risk_register.xlsx");
   };
 
-  const exportSoA = async () => {
-    const { data: controls } = await supabase.from('controls').select('*').order('control_id');
-    if (!controls) return;
-    const usedControls = new Set(risks.flatMap(r => r.existingControlIds));
-    const data = controls.map(c => ({
-      ControlID: c.control_id, ControlName: c.control_name, Category: c.control_category,
-      Applicable: usedControls.has(c.control_id) ? 'Yes' : 'No',
-      Justification: usedControls.has(c.control_id) ? 'Applied to identified risks' : 'Not applicable to current risk assessment',
-    }));
-    download(data, "SoA", "statement_of_applicability.xlsx");
-  };
 
   const exportAssetInventory = () => {
     download(assets.map(({ id, ...rest }) => rest), "Assets", "asset_inventory.xlsx");
@@ -58,7 +47,6 @@ export default function Reports() {
 
   const reports = [
     { title: "Risk Register", desc: "Complete risk register with all assessments", action: exportRiskRegister, count: risks.length },
-    { title: "Statement of Applicability (SoA)", desc: "ISO 27001 Annex A control applicability", action: exportSoA, count: 93 },
     { title: "Risk Treatment Plan", desc: "Risks requiring treatment (score > threshold)", action: exportTreatmentPlan, count: risks.filter(r => r.riskScore > settings.riskThreshold).length },
     { title: "Asset Inventory", desc: "Complete asset register with CIA ratings", action: exportAssetInventory, count: assets.length },
   ];
