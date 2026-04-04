@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { FileDown } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+
 
 export default function Reports() {
   const { assets, risks, settings } = useApp();
