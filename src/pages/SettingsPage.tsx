@@ -92,9 +92,10 @@ export default function ConfigurationPage() {
 
   const addLocation = async () => {
     const trimmed = newLocation.trim();
+    const normalized = trimmed.toLowerCase();
     if (!trimmed) return;
-    if (locations.some(l => l.name.toLowerCase() === trimmed.toLowerCase())) {
-      toast.error("Location already exists");
+    if (locations.some(l => l.name.trim().toLowerCase() === normalized)) {
+      toast.error("Location already exists for this organisation");
       return;
     }
     setAddingLocation(true);
@@ -106,7 +107,11 @@ export default function ConfigurationPage() {
       setNewLocation('');
       toast.success("Location added");
     } catch (err: any) {
-      toast.error(err.message || "Failed to add location");
+      if (err?.code === '23505') {
+        toast.error("Location already exists for this organisation");
+      } else {
+        toast.error(err.message || "Failed to add location");
+      }
     } finally {
       setAddingLocation(false);
     }
