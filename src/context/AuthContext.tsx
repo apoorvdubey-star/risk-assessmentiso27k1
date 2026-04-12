@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable/index';
 import { Session, User } from '@supabase/supabase-js';
 
 export type AppRole = 'admin' | 'risk_owner' | 'user';
@@ -125,19 +126,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [ensureProfile, loadUserRole, resolveTenant]);
 
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
+    const result = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: window.location.origin,
     });
-    if (error) throw error;
+
+    if (result.error) throw result.error;
   };
 
   const signInWithApple = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'apple',
-      options: { redirectTo: window.location.origin },
+    const result = await lovable.auth.signInWithOAuth('apple', {
+      redirect_uri: window.location.origin,
     });
-    if (error) throw error;
+
+    if (result.error) throw result.error;
   };
 
   const signOut = async () => {
