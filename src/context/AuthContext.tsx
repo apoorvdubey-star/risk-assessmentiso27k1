@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { lovable } from '@/integrations/lovable';
+import { lovable } from '@/integrations/lovable/index';
 import { Session, User } from '@supabase/supabase-js';
 
 export type AppRole = 'admin' | 'risk_owner' | 'user';
